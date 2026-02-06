@@ -1,0 +1,1231 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MDL & Drawing Manager</title>
+    <style>
+        body {
+            font-family: system-ui, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f5f5f5;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .page {
+            display: none;
+        }
+
+            .page.active {
+                display: block;
+            }
+
+        .quick-entry-bar, .search-bar {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+        }
+
+        input, button, select, textarea {
+            padding: 10px 14px;
+            font-size: 1rem;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+        }
+
+            input[type="search"] {
+                flex: 1;
+                min-width: 250px;
+            }
+
+        button {
+            background: #0066cc;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+
+            button:hover {
+                background: #0055aa;
+            }
+
+        .create-btn {
+            background: #28a745;
+        }
+
+            .create-btn:hover {
+                background: #218838;
+            }
+
+        .rollback-btn {
+            background: #dc3545;
+        }
+
+            .rollback-btn:hover {
+                background: #c82333;
+            }
+
+        section {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 1.5rem;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+
+        th {
+            background: #f0f0f0;
+        }
+
+        tr {
+            cursor: pointer;
+        }
+
+            tr:hover {
+                background: #f8f9fa;
+            }
+
+        .modal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.5);
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 700px;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .carry-over-list {
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 10px;
+            border-radius: 4px;
+            background: #f9f9f9;
+        }
+
+        .history-group {
+            margin-bottom: 12px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .close {
+            float: right;
+            font-size: 2rem;
+            cursor: pointer;
+            color: #aaa;
+        }
+
+            .close:hover {
+                color: #333;
+            }
+
+        tr.pending-carryover {
+            background-color: #fff3cd !important;
+            border-left: 4px solid #ffc107;
+        }
+
+            tr.pending-carryover:hover {
+                background-color: #ffeaa7 !important;
+            }
+
+        td:nth-child(3), td:nth-child(4) {
+            font-family: monospace;
+            font-weight: 500;
+        }
+
+        .row {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+
+        .drawing-section {
+            border: 1px solid #ddd;
+            padding: 16px;
+            margin-bottom: 24px;
+            background: #fff;
+            border-radius: 8px;
+        }
+
+        .workspace {
+            border: 1px dashed #aaa;
+            padding: 12px;
+            background: #fafafa;
+            border-radius: 6px;
+        }
+
+        .part-card {
+            border: 1px solid #ccc;
+            padding: 12px;
+            margin: 12px 0;
+            border-radius: 6px;
+            background: #fff;
+        }
+
+            .part-card h4 {
+                cursor: pointer;
+                margin: 0;
+                padding-bottom: 8px;
+                border-bottom: 1px solid #eee;
+            }
+
+        .part-details {
+            margin-top: 12px;
+        }
+
+        .child-workspace {
+            margin-left: 24px;
+        }
+
+        .bom-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.95rem;
+        }
+
+            .bom-table th, .bom-table td {
+                border: 1px solid #ddd;
+                padding: 8px;
+            }
+
+        .incomplete {
+            background-color: #fff0f0;
+        }
+
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ─── PAGE 1: MDL LIST ─────────────────────────────────────── -->
+    <div id="page-list" class="page container active">
+        <header>
+            <h1>MDL & Drawing Manager</h1>
+            <p>Local Storage – data saved in your browser</p>
+        </header>
+        <div class="search-bar">
+            <input type="search" id="searchInput" placeholder="Search MDLs by ID, title, company..." aria-label="Search MDLs">
+            <button class="create-btn" onclick="openMdlModal()">+ Create New MDL</button>
+        </div>
+        <section id="mdlResults">
+            <h2>Master Data Lists</h2>
+            <p id="no-results">No MDLs yet. Create one to get started!</p>
+            <table id="mdlTable" style="display:none;">
+                <thead><tr><th>MDL ID</th><th>Title</th><th>Company</th><th>Revision</th><th>Created</th></tr></thead>
+                <tbody id="mdlBody"></tbody>
+            </table>
+        </section>
+    </div>
+
+    <!-- ─── PAGE 2: MDL DETAIL ───────────────────────────────────── -->
+    <div id="page-detail" class="page container">
+        <div id="mdlDetailView">
+            <section>
+                <div style="margin-bottom:1.5rem;">
+                    <button onclick="showPage('list')">← Back to MDL List</button>
+                </div>
+                <div style="display:flex; gap:16px; align-items:center; flex-wrap:wrap; margin-bottom:1.5rem;">
+                    <h2 id="mdlHeader"></h2>
+                    <label>MDL Revision: </label>
+                    <select id="mdlRevSelector" onchange="changeMdlRevision(this.value)"></select>
+                    <button onclick="openMdlNewRevModal()">New MDL Revision</button>
+                    <button id="rollbackBtn" class="rollback-btn" style="display:none;" onclick="rollbackToViewedRevision()">Rollback to this revision</button>
+                </div>
+                <div class="quick-entry-bar">
+                    <input type="text" id="quick-dwg-number" placeholder="Drawing Number" style="width:180px;">
+                    <input type="text" id="quick-dwg-title" placeholder="Title / Description" style="flex:1; min-width:280px;">
+                    <input type="text" id="quick-dwg-rev" placeholder="Revision" value="A" style="width:90px;">
+                </div>
+                <div class="search-bar">
+                    <input type="search" id="drawingSearch" placeholder="Search drawings by number or title...">
+                    <button class="create-btn" onclick="openDrawingCreateModal()">+ Create New Drawing</button>
+                </div>
+                <p id="no-drawings" style="display:none;">No drawings yet.</p>
+                <table id="drawingsTable" style="display:none;">
+                    <thead>
+                        <tr>
+                            <th>Drawing Number</th>
+                            <th>Title</th>
+                            <th>Last Worked Rev</th>
+                            <th>Latest Rev</th>
+                            <th>Created</th>
+                            <th>Last Updated</th>
+                            <th>% Finished</th>
+                        </tr>
+                    </thead>
+                    <tbody id="drawingsBody"></tbody>
+                </table>
+            </section>
+        </div>
+    </div>
+
+    <!-- ─── PAGE 3: DRAWING EDITOR ───────────────────────────────── -->
+    <div id="page-editor" class="page container">
+        <div style="margin-bottom:1.5rem; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+            <button onclick="backToDrawingsList()">← Back to Drawings</button>
+            <div class="row">
+                <h2 id="drawingEditorTitle">Drawing Editor</h2>
+                <label>Revision: </label>
+                <select id="dwgRevSelector" onchange="changeDwgRevision(this.value)"></select>
+            </div>
+            <div>
+                <button id="saveDrawingBtn">Save</button>
+                <button id="saveExitDrawingBtn">Save & Back</button>
+                <button onclick="backToDrawingsList()">Cancel</button>
+            </div>
+        </div>
+        <!-- Drawing info -->
+        <div class="drawing-section">
+            <h3>Drawing</h3>
+            <div class="row">
+                <label style="min-width:140px;">Drawing Number</label>
+                <input type="text" id="dwg-number" style="flex:1;">
+            </div>
+            <div class="row">
+                <label style="min-width:140px;">Title / Description</label>
+                <input type="text" id="dwg-title" style="flex:1;">
+            </div>
+            <div class="row">
+                <input type="text" id="new-rev-input" placeholder="New rev..." style="width:90px;">
+                <button id="start-new-rev-btn" style="background:#ffc107; color:black;">New Revision</button>
+            </div>
+        </div>
+        <!-- Carry-over panel -->
+        <div class="drawing-section hidden" id="revision-controls-area">
+            <h3>New Revision – Carry-over Options</h3>
+            <div id="new-revision-area" class="workspace">
+                <div class="row">
+                    <label style="min-width:140px;">Target Revision</label>
+                    <input type="text" id="new-rev-label" style="width:120px;" readonly>
+                </div>
+                <div class="row">
+                    <label style="min-width:140px;">From Revision</label>
+                    <input type="text" id="prev-rev" readonly>
+                </div>
+                <div style="margin:16px 0;">
+                    <label><input type="checkbox" id="carry-all-parts" checked> Carry ALL parts & sub-assemblies</label><br>
+                    <label><input type="checkbox" id="carry-notes" checked> Carry notes / status</label>
+                </div>
+                <div style="margin-top:1rem;">
+                    <strong>Or selectively carry specific parts:</strong>
+                    <div id="carry-parts-selector" class="carry-over-list" style="margin-top:8px;"></div>
+                </div>
+                <div style="margin-top:1.5rem;">
+                    <button id="apply-revision-btn" style="background:#28a745; padding:10px 20px;">Apply & Switch</button>
+                    <button onclick="hideRevisionControls()" style="margin-left:12px;">Cancel</button>
+                </div>
+            </div>
+        </div>
+        <!-- Parts -->
+        <div class="drawing-section">
+            <h3>Parts</h3>
+            <button id="add-part-btn" class="create-btn">+ Add Part</button>
+            <div id="parts-container" class="workspace"></div>
+        </div>
+        <!-- Notes -->
+        <div class="drawing-section">
+            <h3>Notes / Status</h3>
+            <textarea id="dwg-notes" rows="4" style="width:100%;"></textarea>
+        </div>
+        <!-- BOM -->
+        <div class="drawing-section">
+            <h3>Drawing BOM Preview</h3>
+            <table class="bom-table">
+                <thead>
+                    <tr><th>DWG</th><th>Rev</th><th>Assy</th><th>Part</th><th>Description</th><th>Material</th><th>Finish</th><th>Coupon</th></tr>
+                </thead>
+                <tbody id="bom-tbody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- ─── SHARED MODALS ────────────────────────────────────────── -->
+    <div id="mdlModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeMdlModal()">×</span>
+            <h2>Create New MDL</h2>
+            <form id="mdlForm">
+                <label>MDL ID *</label><input type="text" id="mdl-id" required>
+                <label>Title *</label><input type="text" id="mdl-title" required>
+                <label>Company (optional)</label><input type="text" id="mdl-company">
+                <label>Initial Revision</label><input type="text" id="mdl-rev" value="A">
+                <button type="submit">Create MDL</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="mdlNewRevModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeMdlNewRevModal()">×</span>
+            <h2>New MDL Revision</h2>
+            <form id="mdlNewRevForm">
+                <label>New Revision Label *</label>
+                <input type="text" id="new-mdl-rev" required style="width:100%; margin:0 0 1rem 0;">
+                <h3>Carry over drawings (choose version & optional bump)</h3>
+                <div id="prev-drawings-select" class="carry-over-list"></div>
+                <button type="submit" style="margin-top:1.2rem;">Create Revision</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="drawingCreateModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeDrawingCreateModal()">×</span>
+            <h2>Create New Drawing</h2>
+            <form id="drawingCreateForm">
+                <label>Drawing Number *</label><input type="text" id="new-dwg-number" required>
+                <label>Title / Description *</label><input type="text" id="new-dwg-title" required>
+                <label>Initial Revision</label><input type="text" id="new-dwg-rev" value="A">
+                <button type="submit">Create Drawing</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+    /* const STORAGE_KEY = 'engineering_mdl_drawings';  create a constant(value that cannot be reassigned) called STORAGE_KEY it has the string value 'engineering_mdl_drawings' 
+
+    let mdls = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+    let mdls stores the result either [] an empty array or the STORAGE_KEY in local storage to the variable mdls
+    JSON.parse( … ) Takes the string we got from localStorage and tries to convert it back into a real JavaScript value. 
+    Example: if localStorage contained '[{"id":1,"name":"drawingA"}]' → it becomes a real array with an object
+    
+    function saveData() { localStorage.setItem(STORAGE_KEY, JSON.stringify(mdls)); } 
+    when this is called it takes the current array or object stored in the variable mdls which is being converted into a JSON string with Json.strinify() 
+    saves into localStorage under the engineering_mdl_drawings key
+
+    those 3 functions effectively read data from local storage on start up and then save data writes data when its called to local storage
+    
+    function uuid() { return Math.random().toString(36).slice(2, 10); }
+    Math.random() → number between 0 and 1 (e.g. 0.734129847...).toString(36) → converts it to base-36 (uses 0-9 + a-z) → something like "0.p8k9j2f3n"
+    .slice(2, 10) → cuts off the "0." and takes next 8 characters Result: 8-character string like "k9j2f3n4", "7bqx9m2p", etc.
+    
+    function findMdl(id) { return mdls.find(m => m.id === id); }
+    the way functions work is they have a name findMdl and a return for what data they give out in this case (id)
+    this searches mdls which is our JSON parsed data that gets loaded from let mdls which is made into json arrays when they are saved by saveData()
+    .find(m => m.id === id) this is a built in javascript function that creates a loop with the variable m for each item in the array like a for loop ex. for(let m of mdls)
+    and then return the variable m.id thats an id which matches the id we were given m.id === id
+    
+    function findDrawing(mdlId, dwgNum) {  const mdl = findMdl(mdlId); return mdl ? mdl.drawings.find(d => d.number === dwgNum) : null; }
+    we start by creating a constant using our previous function  if the model exists look for drawings and return the first drawing that matches and if theres no model return null
+    ? in javascript is the same an if so mdl ? mdl.drawings.find(d => d.number === dwgNum) means if we find it return it else : null; return null
+    
+    function findPartById
+
+    loop through each part in our part array find the part with the matching id return it if it has children call itself on the children
+    if something calls not null then return it
+
+    basically it searches deep down the tree to make sure it gets everything even if its nested super deep
+    */
+
+    // ─── SHARED ──────────────────────────────────────────────────
+    const STORAGE_KEY = 'engineering_mdl_drawings'; 
+    let mdls = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+    function saveData() { localStorage.setItem(STORAGE_KEY, JSON.stringify(mdls)); } 
+    function uuid() { return Math.random().toString(36).slice(2, 10); }
+    function findMdl(id) { return mdls.find(m => m.id === id); }
+    function findDrawing(mdlId, dwgNum) {
+      const mdl = findMdl(mdlId);
+      return mdl ? mdl.drawings.find(d => d.number === dwgNum) : null;
+    }
+    function findPartById(parts, id) {
+      for (let p of parts) {
+        if (p.id === id) return p;
+        if (p.children) {
+          const found = findPartById(p.children, id);
+          if (found) return found;
+        }
+      }
+      return null;
+    }
+
+    // ─── PAGE NAVIGATION ────────────────────────────────────────
+    function showPage(pageId) {
+      document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+      document.getElementById(`page-${pageId}`).classList.add('active');
+      if (pageId === 'list') renderMdlList();
+    }
+
+    // ─── PAGE 1: LIST ───────────────────────────────────────────
+    function renderMdlList(filtered = mdls) {
+      const tbody = document.getElementById('mdlBody');
+      const noMsg = document.getElementById('no-results');
+      const table = document.getElementById('mdlTable');
+      tbody.innerHTML = '';
+      if (filtered.length === 0) {
+        noMsg.textContent = mdls.length ? "No matches." : "No MDLs yet.";
+        table.style.display = 'none';
+        return;
+      }
+      noMsg.textContent = '';
+      table.style.display = 'table';
+      filtered.forEach(m => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${m.id}</td><td>${m.title}</td><td>${m.company || '—'}</td><td>${m.revision || '—'}</td><td>${m.created}</td>`;
+        tr.dataset.id = m.id;
+        tbody.appendChild(tr);
+      });
+    }
+    document.getElementById('searchInput')?.addEventListener('input', e => {
+      const term = e.target.value.trim().toLowerCase();
+      const filtered = term ? mdls.filter(m =>
+        m.id.toLowerCase().includes(term) ||
+        m.title.toLowerCase().includes(term) ||
+        (m.company && m.company.toLowerCase().includes(term))) : mdls;
+      renderMdlList(filtered);
+    });
+    document.getElementById('mdlBody')?.addEventListener('click', e => {
+      const tr = e.target.closest('tr');
+      if (!tr) return;
+      currentMdlId = tr.dataset.id;
+      showMdlDetail();
+      showPage('detail');
+    });
+
+    // ─── PAGE 2: DETAIL ─────────────────────────────────────────
+    let currentMdlId = null;
+    let currentMdlRev = null;
+
+    function showMdlDetail() {
+      const mdl = findMdl(currentMdlId);
+      if (!mdl) return showPage('list');
+      document.getElementById('mdlHeader').textContent = `MDL: ${mdl.title} (${mdl.id})${mdl.company ? ` – ${mdl.company}` : ''}`;
+      populateMdlRevSelector(mdl);
+      renderDrawingsList(mdl.drawings.filter(d => d.mdlRev === currentMdlRev || !d.mdlRev));
+      showPage('detail');
+    }
+
+    function populateMdlRevSelector(mdl) {
+      const select = document.getElementById('mdlRevSelector');
+      select.innerHTML = '';
+      const revs = [mdl.revision, ...Object.keys(mdl.previousRevisions || {})].sort();
+      revs.forEach(r => {
+        const opt = document.createElement('option');
+        opt.value = r; opt.textContent = r;
+        if (r === currentMdlRev) opt.selected = true;
+        select.appendChild(opt);
+      });
+    }
+
+    function changeMdlRevision(rev) {
+      currentMdlRev = rev;
+      const mdl = findMdl(currentMdlId);
+      const drawings = (rev === mdl.revision) ? mdl.drawings : (mdl.previousRevisions?.[rev]?.drawings || []);
+      renderDrawingsList(drawings);
+      document.getElementById('rollbackBtn').style.display = (rev === mdl.revision) ? 'none' : 'inline-block';
+    }
+
+    function rollbackToViewedRevision() {
+      const targetRev = currentMdlRev;
+      const mdl = findMdl(currentMdlId);
+      if (targetRev === mdl.revision) return;
+      mdl.previousRevisions = mdl.previousRevisions || {};
+      if (!mdl.previousRevisions[mdl.revision]) {
+        mdl.previousRevisions[mdl.revision] = { drawings: JSON.parse(JSON.stringify(mdl.drawings)) };
+      }
+      mdl.drawings = JSON.parse(JSON.stringify(mdl.previousRevisions[targetRev].drawings));
+      mdl.revision = targetRev;
+      mdl.lastUpdated = new Date().toLocaleString();
+      saveData();
+      currentMdlRev = targetRev;
+      populateMdlRevSelector(mdl);
+      renderDrawingsList(mdl.drawings);
+      document.getElementById('rollbackBtn').style.display = 'none';
+    }
+
+    function calculatePercentFinished(d) {
+      if (!d.parts || d.parts.length === 0) return '0%';
+      let percent = 75;
+      if (d.parts.every(p => p.finish && p.finish.trim() !== '')) percent = 90;
+      if (d.coupons && d.coupons.length > 0) percent = 100;
+      return percent + '%';
+    }
+
+    function renderDrawingsList(drawings) {
+      const tbody = document.getElementById('drawingsBody');
+      const noMsg = document.getElementById('no-drawings');
+      const table = document.getElementById('drawingsTable');
+      tbody.innerHTML = '';
+      if (drawings.length === 0) {
+        noMsg.style.display = 'block';
+        table.style.display = 'none';
+        return;
+      }
+      noMsg.style.display = 'none';
+      table.style.display = 'table';
+      drawings.forEach(d => {
+        let lastWorkedRev = d.revision || '—';
+        let latestRev = d.revision || '—';
+        let isPending = false;
+        if (d.plannedRevision && d.plannedRevision !== d.revision) {
+          lastWorkedRev = d.revision || '—';
+          latestRev = d.plannedRevision;
+          isPending = true;
+        }
+        const tr = document.createElement('tr');
+        tr.dataset.number = d.number;
+        if (isPending) {
+          tr.classList.add('pending-carryover');
+          tr.dataset.pending = 'true';
+          tr.dataset.lastWorked = lastWorkedRev;
+          tr.dataset.latest = latestRev;
+        }
+        tr.innerHTML = `
+          <td>${d.number}</td>
+          <td>${d.title}</td>
+          <td>${lastWorkedRev}</td>
+          <td>${latestRev}</td>
+          <td>${d.created}</td>
+          <td>${d.lastUpdated || d.created}</td>
+          <td>${calculatePercentFinished(d)}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    document.getElementById('drawingSearch')?.addEventListener('input', e => {
+      const term = e.target.value.trim().toLowerCase();
+      const mdl = findMdl(currentMdlId);
+      const filtered = mdl.drawings.filter(d =>
+        d.number.toLowerCase().includes(term) || d.title.toLowerCase().includes(term));
+      renderDrawingsList(filtered);
+    });
+
+    document.getElementById('drawingsBody')?.addEventListener('click', e => {
+        const tr = e.target.closest('tr');
+        if (!tr) return;
+        const number = tr.dataset.number;
+        currentDrawingNumber = number;
+        loadDrawingIntoEditor();  // ← this now handles auto-open internally
+        showPage('editor');
+    });
+
+    // Quick create drawing
+    const quickNumber = document.getElementById('quick-dwg-number');
+    const quickTitle = document.getElementById('quick-dwg-title');
+    const quickRev = document.getElementById('quick-dwg-rev');
+    quickRev?.addEventListener('keydown', e => {
+      if (e.key === 'Tab' && !e.shiftKey) {
+        e.preventDefault();
+        createQuickDrawing();
+      }
+    });
+
+    function createQuickDrawing() {
+      const number = quickNumber.value.trim();
+      const title = quickTitle.value.trim();
+      const rev = quickRev.value.trim() || 'A';
+      if (!number || !title) return;
+      const mdl = findMdl(currentMdlId);
+      if (mdl.drawings.some(d => d.number === number)) {
+        alert("Drawing number already exists.");
+        return;
+      }
+      const now = new Date().toLocaleString();
+      const newDwg = {
+        number, title, revision: rev, created: now, lastUpdated: now,
+        mdlRev: currentMdlRev, parts: [], notes: '', previousRevisions: {}
+      };
+      mdl.drawings.push(newDwg);
+      saveData();
+      renderDrawingsList(mdl.drawings.filter(d => d.mdlRev === currentMdlRev));
+      quickNumber.value = '';
+      quickTitle.value = '';
+      quickRev.value = 'A';
+      quickNumber.focus();
+    }
+
+    // MDL New Revision modal
+    function openMdlNewRevModal() {
+      document.getElementById('mdlNewRevModal').style.display = 'flex';
+      document.getElementById('new-mdl-rev').value = '';
+      const mdl = findMdl(currentMdlId);
+      const list = document.getElementById('prev-drawings-select');
+      list.innerHTML = '';
+      let allRevs = [{ rev: mdl.revision, drawings: mdl.drawings }];
+      if (mdl.previousRevisions) {
+        Object.entries(mdl.previousRevisions).forEach(([r, data]) => {
+          allRevs.push({ rev: r, drawings: data.drawings });
+        });
+      }
+      const groups = {};
+      allRevs.forEach(({ rev, drawings }) => {
+        drawings.forEach(d => {
+          if (!groups[d.number]) groups[d.number] = [];
+          groups[d.number].push({ rev, drawing: { ...d } });
+        });
+      });
+      Object.keys(groups).sort().forEach(num => {
+        const versions = groups[num].sort((a, b) => a.rev.localeCompare(b.rev));
+        const group = document.createElement('div');
+        group.className = 'history-group';
+        const label = document.createElement('label');
+        label.innerHTML = `<input type="checkbox" class="carry-dwg" data-number="${num}" checked> <strong>${num}</strong> — <span id="title-${num}">${versions[versions.length - 1].drawing.title}</span>`;
+        group.appendChild(label);
+        const selDiv = document.createElement('div');
+        selDiv.style.display = 'flex';
+        selDiv.style.gap = '10px';
+        selDiv.style.alignItems = 'center';
+        const selLabel = document.createElement('label');
+        selLabel.textContent = 'Source:';
+        selDiv.appendChild(selLabel);
+        const sel = document.createElement('select');
+        sel.dataset.number = num;
+        versions.forEach(v => {
+          const opt = document.createElement('option');
+          opt.value = v.rev;
+          opt.textContent = `From MDL ${v.rev} (rev ${v.drawing.revision || '?'})`;
+          opt.dataset.json = JSON.stringify(v.drawing);
+          if (v.rev === mdl.revision) opt.selected = true;
+          sel.appendChild(opt);
+        });
+        sel.addEventListener('change', () => {
+          const json = sel.options[sel.selectedIndex].dataset.json;
+          const dwg = JSON.parse(json);
+          document.getElementById(`title-${num}`).textContent = dwg.title;
+          const bumpInput = document.querySelector(`input[data-number="${num}"][placeholder="Bump to new rev (optional)"]`);
+          bumpInput.placeholder = `Bump to new rev (current: ${dwg.revision || 'A'})`;
+        });
+        selDiv.appendChild(sel);
+        const bumpLabel = document.createElement('label');
+        bumpLabel.textContent = 'Bump:';
+        selDiv.appendChild(bumpLabel);
+        const bumpInput = document.createElement('input');
+        bumpInput.type = 'text';
+        bumpInput.placeholder = `Bump to new rev (current: ${versions[versions.length - 1].drawing.revision || 'A'})`;
+        bumpInput.dataset.number = num;
+        bumpInput.style.width = '120px';
+        selDiv.appendChild(bumpInput);
+        group.appendChild(selDiv);
+        list.appendChild(group);
+      });
+    }
+
+    function closeMdlNewRevModal() { document.getElementById('mdlNewRevModal').style.display = 'none'; }
+
+    document.getElementById('mdlNewRevForm')?.addEventListener('submit', e => {
+      e.preventDefault();
+      const newRev = document.getElementById('new-mdl-rev').value.trim();
+      if (!newRev) return alert("Enter new revision label");
+      const mdl = findMdl(currentMdlId);
+      mdl.previousRevisions = mdl.previousRevisions || {};
+      mdl.previousRevisions[mdl.revision] = { drawings: JSON.parse(JSON.stringify(mdl.drawings)) };
+      const selected = [];
+      document.querySelectorAll('#prev-drawings-select .carry-dwg:checked').forEach(cb => {
+        const num = cb.dataset.number;
+        const sel = document.querySelector(`select[data-number="${num}"]`);
+        const json = sel.options[sel.selectedIndex].dataset.json;
+        let dwg = JSON.parse(json);
+        const bumpInput = document.querySelector(`input[data-number="${num}"][placeholder^="Bump to new rev"]`);
+        const bumpRev = bumpInput.value.trim();
+        if (bumpRev && bumpRev !== dwg.revision) {
+          dwg.plannedRevision = bumpRev;
+          dwg.lastUpdated = new Date().toLocaleString();
+        }
+        dwg.mdlRev = newRev;
+        selected.push(dwg);
+      });
+      mdl.revision = newRev;
+      mdl.lastUpdated = new Date().toLocaleString();
+      mdl.drawings = selected;
+      saveData();
+      currentMdlRev = newRev;
+      populateMdlRevSelector(mdl);
+      renderDrawingsList(mdl.drawings);
+      closeMdlNewRevModal();
+    });
+
+    // ─── PAGE 3: EDITOR ──────────────────────────────────────────
+    let currentDrawingNumber = null;
+    let drawingData = { number: '', revision: 'A', parts: [], notes: '' };
+
+        function loadDrawingIntoEditor() {
+            const dwg = findDrawing(currentMdlId, currentDrawingNumber);
+            if (!dwg) {
+                alert("Drawing not found");
+                showPage('detail');
+                return;
+            }
+
+            drawingData = {
+                number: dwg.number,
+                title: dwg.title,
+                revision: dwg.revision || 'A',
+                parts: JSON.parse(JSON.stringify(dwg.parts || [])),
+                notes: dwg.notes || ''
+            };
+
+            document.getElementById('dwg-title').value = drawingData.title;
+            document.getElementById('dwg-number').value = drawingData.number;
+            document.getElementById('dwg-notes').value = drawingData.notes;
+            document.getElementById('drawingEditorTitle').textContent = `Drawing: ${drawingData.number}`;
+
+            const partsWs = document.getElementById('parts-container');
+            partsWs.innerHTML = '';
+            drawingData.parts.forEach(p => createPartCard(partsWs, false, null, p));
+
+            populateDwgRevSelector(dwg);
+            updateBOM();
+            hideRevisionControls();
+
+            // ─── AUTO-OPEN CARRY-OVER IF COMING FROM PENDING ROW ────────────────
+            // We simulate the query params here because window.location.search doesn't update
+            const isAutoCarry = currentDrawingNumber && document.querySelector(`tr[data-number="${currentDrawingNumber}"]`)?.dataset.pending === 'true';
+            if (isAutoCarry) {
+                // Get the planned revision from the table row data (set earlier)
+                const row = document.querySelector(`tr[data-number="${currentDrawingNumber}"]`);
+                const targetNewRev = row?.dataset.latest;
+                if (targetNewRev) {
+                    const input = document.getElementById('new-rev-input');
+                    if (input) {
+                        input.value = targetNewRev;
+                        setTimeout(() => {
+                            const btn = document.getElementById('start-new-rev-btn');
+                            if (btn && typeof btn.onclick === 'function') {
+                                btn.onclick(); // Call the handler directly
+                            } else if (btn) {
+                                btn.click();   // Fallback
+                            }
+                            // Optional: scroll to the carry-over section
+                            setTimeout(() => {
+                                document.getElementById('revision-controls-area')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            }, 300);
+                        }, 150);
+                    }
+                }
+            }
+
+            showPage('editor');
+        }
+
+    function populateDwgRevSelector(dwg) {
+      const select = document.getElementById('dwgRevSelector');
+      select.innerHTML = '';
+      const revs = [dwg.revision, ...Object.keys(dwg.previousRevisions || {})].sort();
+      revs.forEach(r => {
+        const opt = document.createElement('option');
+        opt.value = r;
+        opt.text = r;
+        if (r === drawingData.revision) opt.selected = true;
+        select.appendChild(opt);
+      });
+    }
+
+    function changeDwgRevision(rev) {
+      const dwg = findDrawing(currentMdlId, currentDrawingNumber);
+      const revData = rev === dwg.revision ? dwg : (dwg.previousRevisions?.[rev] || {});
+      drawingData.revision = rev;
+      drawingData.parts = JSON.parse(JSON.stringify(revData.parts || []));
+      drawingData.notes = revData.notes || '';
+      document.getElementById('dwg-notes').value = drawingData.notes;
+      const partsWs = document.getElementById('parts-container');
+      partsWs.innerHTML = '';
+      drawingData.parts.forEach(p => createPartCard(partsWs, false, null, p));
+      updateBOM();
+      hideRevisionControls();
+    }
+
+    document.getElementById('start-new-rev-btn').onclick = () => {
+      const newRev = document.getElementById('new-rev-input').value.trim();
+      if (!newRev) return alert("Enter a new revision label");
+      if (newRev === drawingData.revision) return alert("That's the current revision");
+      showRevisionControls(newRev);
+    };
+
+    function showRevisionControls(targetRev) {
+      document.getElementById('revision-controls-area').classList.remove('hidden');
+      document.getElementById('new-rev-label').value = targetRev;
+      document.getElementById('prev-rev').value = drawingData.revision;
+      const container = document.getElementById('carry-parts-selector');
+      container.innerHTML = '';
+      const dwg = findDrawing(currentMdlId, currentDrawingNumber);
+      const allPrevParts = [];
+      drawingData.parts.forEach(p => allPrevParts.push({ ...p, sourceRev: drawingData.revision }));
+      Object.entries(dwg.previousRevisions || {}).forEach(([rev, data]) => {
+        (data.parts || []).forEach(p => allPrevParts.push({ ...p, sourceRev: rev }));
+      });
+      if (allPrevParts.length === 0) {
+        container.innerHTML = '<p style="color:#777;">No previous parts available.</p>';
+        return;
+      }
+      allPrevParts.forEach((part, i) => {
+        const label = document.createElement('label');
+        label.style.display = 'block';
+        label.style.marginBottom = '6px';
+        label.innerHTML = `
+          <input type="checkbox" class="carry-part-cb" data-index="${i}" checked>
+          ${part.number || '?'} – ${part.desc || '(no description)'}
+          <small>(rev ${part.sourceRev})</small>
+        `;
+        container.appendChild(label);
+      });
+    }
+
+    function hideRevisionControls() {
+      document.getElementById('revision-controls-area').classList.add('hidden');
+    }
+
+    document.getElementById('apply-revision-btn').onclick = () => {
+      const targetRev = document.getElementById('new-rev-label').value.trim();
+      if (!targetRev) return alert("Revision label missing");
+      const dwg = findDrawing(currentMdlId, currentDrawingNumber);
+      if (!dwg) return;
+      if (!dwg.previousRevisions) dwg.previousRevisions = {};
+      dwg.previousRevisions[drawingData.revision] = {
+        parts: JSON.parse(JSON.stringify(drawingData.parts)),
+        notes: drawingData.notes
+      };
+      drawingData.revision = targetRev;
+      dwg.revision = targetRev;
+      const keepAll = document.getElementById('carry-all-parts').checked;
+      const keepNotes = document.getElementById('carry-notes').checked;
+      if (!keepNotes) {
+        drawingData.notes = '';
+        document.getElementById('dwg-notes').value = '';
+      }
+      let newParts = keepAll ? JSON.parse(JSON.stringify(drawingData.parts)) : [];
+      const selected = Array.from(document.querySelectorAll('.carry-part-cb:checked'))
+        .map(cb => parseInt(cb.dataset.index));
+      const allPrev = [];
+      drawingData.parts.forEach(p => allPrev.push({ ...p }));
+      Object.values(dwg.previousRevisions || {}).forEach(r => r.parts?.forEach(p => allPrev.push({ ...p })));
+      selected.forEach(i => {
+        if (allPrev[i]) newParts.push(allPrev[i]);
+      });
+      drawingData.parts = newParts;
+      const partsWs = document.getElementById('parts-container');
+      partsWs.innerHTML = '';
+      drawingData.parts.forEach(p => createPartCard(partsWs, false, null, p));
+      collapseAllPartCards();
+      updateBOM();
+      populateDwgRevSelector(dwg);
+      hideRevisionControls();
+      // Clear planned revision flag after apply
+      if (dwg.plannedRevision) {
+        delete dwg.plannedRevision;
+      }
+      dwg.lastUpdated = new Date().toLocaleString();
+      saveData();
+      alert(`Switched to revision ${targetRev}`);
+    };
+
+    // Part card logic (unchanged – kept as is for brevity)
+    function createPartCard(parentWs, isChild = false, parentId = null, existing = null) {
+      const partId = existing?.id || uuid();
+      const card = document.createElement('div');
+      card.className = 'part-card';
+      card.dataset.id = partId;
+      card.innerHTML = `
+        <h4>${isChild ? 'Child Part' : 'Part'}</h4>
+        <div class="part-details">
+          <div class="row"><label>Part Number</label><input type="text" class="p-num" value="${existing?.number || ''}"></div>
+          <div class="row"><label>Description</label> <input type="text" class="p-desc" value="${existing?.desc || ''}"></div>
+          <div class="row"><label>Material</label> <input type="text" class="p-mat" value="${existing?.material || ''}"></div>
+          <div class="row">
+            <label><input type="checkbox" class="p-asm" ${existing?.isAssembly ? 'checked' : ''}> Assembly</label>
+          </div>
+          <div class="child-workspace ${existing?.isAssembly ? '' : 'hidden'}"></div>
+          <div>
+            <strong>Coupon</strong><br>
+            <label><input type="checkbox" class="p-coup-chk" ${existing?.hasCoupon ? 'checked' : ''}> Has coupon</label>
+            <div id="coupon-div-${partId}" class="row ${existing?.hasCoupon ? '' : 'hidden'}">
+              <input type="text" class="p-coup-val" value="${existing?.coupon || ''}" placeholder="e.g. Hardware">
+            </div>
+          </div>
+          <div>
+            <strong>Finish</strong><br>
+            <label><input type="checkbox" class="p-finish-chk" ${existing?.hasFinish ? 'checked' : ''}> Requires finish</label>
+            <div id="finish-div-${partId}" class="${existing?.hasFinish ? '' : 'hidden'}">
+              <input type="text" class="p-finish-val" value="${existing?.finish || ''}" placeholder="e.g. Anodize Type II">
+            </div>
+          </div>
+          <button class="remove-part" style="margin-top:8px;">Remove</button>
+        </div>
+      `;
+      parentWs.appendChild(card);
+      let targetArray = drawingData.parts;
+      if (parentId) {
+        const parent = findPartById(drawingData.parts, parentId);
+        if (parent) targetArray = parent.children = parent.children || [];
+      }
+      const partObj = existing || {
+        id: partId, number: '', desc: '', material: '',
+        isAssembly: false, children: [],
+        hasCoupon: false, coupon: '',
+        hasFinish: false, finish: ''
+      };
+      if (!existing) targetArray.push(partObj);
+      const header = card.querySelector('h4');
+      const details = card.querySelector('.part-details');
+      header.onclick = () => details.classList.toggle('hidden');
+      card.querySelector('.p-num').oninput = e => { partObj.number = e.target.value; updateBOM(); };
+      card.querySelector('.p-desc').oninput = e => { partObj.desc = e.target.value; updateBOM(); };
+      card.querySelector('.p-mat').oninput = e => { partObj.material = e.target.value; updateBOM(); };
+      card.querySelector('.p-asm').onchange = e => {
+        partObj.isAssembly = e.target.checked;
+        const cw = card.querySelector('.child-workspace');
+        cw.classList.toggle('hidden', !e.target.checked);
+        if (e.target.checked && !cw.querySelector('button')) {
+          const btn = document.createElement('button');
+          btn.textContent = '+ Add Child Part';
+          btn.className = 'create-btn';
+          btn.onclick = () => createPartCard(cw, true, partId);
+          cw.insertBefore(btn, cw.firstChild);
+        }
+        updateBOM();
+      };
+      card.querySelector('.p-coup-chk').onchange = e => {
+        partObj.hasCoupon = e.target.checked;
+        document.getElementById(`coupon-div-${partId}`).classList.toggle('hidden', !e.target.checked);
+        updateBOM();
+      };
+      card.querySelector('.p-coup-val').oninput = e => { partObj.coupon = e.target.value; updateBOM(); };
+      card.querySelector('.p-finish-chk').onchange = e => {
+        partObj.hasFinish = e.target.checked;
+        document.getElementById(`finish-div-${partId}`).classList.toggle('hidden', !e.target.checked);
+        updateBOM();
+      };
+      card.querySelector('.p-finish-val').oninput = e => { partObj.finish = e.target.value; updateBOM(); };
+      card.querySelector('.p-finish-val').onblur = () => {
+        if (partObj.number && partObj.desc) details.classList.add('hidden');
+      };
+      card.querySelector('.remove-part').onclick = () => {
+        card.remove();
+        const idx = targetArray.findIndex(p => p.id === partId);
+        if (idx > -1) targetArray.splice(idx, 1);
+        updateBOM();
+      };
+      if (partObj.isAssembly && partObj.children?.length) {
+        const cw = card.querySelector('.child-workspace');
+        cw.classList.remove('hidden');
+        if (!cw.querySelector('button')) {
+          const btn = document.createElement('button');
+          btn.textContent = '+ Add Child';
+          btn.className = 'create-btn';
+          btn.onclick = () => createPartCard(cw, true, partId);
+          cw.appendChild(btn);
+        }
+        partObj.children.forEach(c => createPartCard(cw, true, partId, c));
+      }
+    }
+
+    function collapseAllPartCards() {
+      document.querySelectorAll('.part-details').forEach(d => d.classList.add('hidden'));
+    }
+
+    function updateBOM() {
+      const tbody = document.getElementById('bom-tbody');
+      tbody.innerHTML = '';
+      const dwgNum = drawingData.number || 'NEW';
+      const rev = drawingData.revision || '—';
+      tbody.innerHTML += `
+        <tr style="font-weight: bold; background: #e9ecef;">
+          <td>${dwgNum}</td>
+          <td>${rev}</td>
+          <td></td>
+          <td></td>
+          <td>${drawingData.title || '(no title)'}</td>
+          <td></td>
+          <td></td>
+          <td></td>
+        </tr>`;
+      const nestedAssemblies = [];
+      function renderLevel(parts, level = 1) {
+        parts.forEach(part => {
+          const isAsm = part.isAssembly;
+          let assyCol = '';
+          let partCol = part.number || '';
+          let couponCol = part.hasCoupon ? (part.coupon || '') : '—';
+          if (isAsm) {
+            assyCol = part.number || '';
+            partCol = '';
+            couponCol = 'See Assy';
+          }
+          const fCls = part.hasFinish && !part.finish ? 'incomplete' : '';
+          const cCls = part.hasCoupon && !part.coupon ? 'incomplete' : '';
+          const fVal = part.hasFinish ? (part.finish || '') : '—';
+          const indent = ' '.repeat(level - 1);
+          tbody.innerHTML += `
+            <tr>
+              <td></td><td></td>
+              <td>${indent}${assyCol}</td>
+              <td>${partCol}</td>
+              <td>${part.desc || ''}</td>
+              <td>${part.material || ''}</td>
+              <td class="${fCls}">${fVal}</td>
+              <td class="${cCls}">${couponCol}</td>
+            </tr>`;
+          if (isAsm && part.children?.length > 0) {
+            part.children.forEach(child => {
+              if (child.isAssembly) {
+                renderChild({ ...child, isAssembly: true }, level + 1);
+                nestedAssemblies.push(child);
+              } else {
+                renderChild(child, level + 1);
+              }
+            });
+          }
+        });
+      }
+      function renderChild(child, level) {
+        const isAsm = child.isAssembly;
+        let assyCol = '';
+        let partCol = child.number || '';
+        let couponCol = child.hasCoupon ? (child.coupon || '') : '—';
+        if (isAsm) couponCol = 'See Assy';
+        const fCls = child.hasFinish && !child.finish ? 'incomplete' : '';
+        const cCls = child.hasCoupon && !child.coupon ? 'incomplete' : '';
+        const fVal = child.hasFinish ? (child.finish || '') : '—';
+        const indent = ' '.repeat(level - 1);
+        tbody.innerHTML += `
+          <tr>
+            <td></td><td></td>
+            <td>${indent}${assyCol}</td>
+            <td>${partCol}</td>
+            <td>${child.desc || ''}</td>
+            <td>${child.material || ''}</td>
+            <td class="${fCls}">${fVal}</td>
+            <td class="${cCls}">${couponCol}</td>
+          </tr>`;
+      }
+      renderLevel(drawingData.parts);
+      nestedAssemblies.forEach(subAsm => {
+        tbody.innerHTML += `
+          <tr style="background: #f8f9fa; font-weight: bold;">
+            <td></td><td></td>
+            <td>${subAsm.number || ''}</td>
+            <td></td>
+            <td>${subAsm.desc || '(sub-assembly)'}</td>
+            <td>${subAsm.material || ''}</td>
+            <td></td>
+            <td>See Assy</td>
+          </tr>`;
+        if (subAsm.children?.length > 0) {
+          subAsm.children.forEach(child => renderChild(child, 2));
+        }
+      });
+    }
+
+    document.getElementById('saveDrawingBtn').onclick = () => {
+      const dwg = findDrawing(currentMdlId, currentDrawingNumber);
+      if (!dwg) return;
+      dwg.title = document.getElementById('dwg-title').value.trim();
+      dwg.number = document.getElementById('dwg-number').value.trim();
+      dwg.revision = drawingData.revision;
+      dwg.notes = document.getElementById('dwg-notes').value;
+      dwg.parts = JSON.parse(JSON.stringify(drawingData.parts));
+      dwg.lastUpdated = new Date().toLocaleString();
+      saveData();
+      alert("Drawing saved.");
+    };
+
+    document.getElementById('saveExitDrawingBtn').onclick = () => {
+      document.getElementById('saveDrawingBtn').click();
+      backToDrawingsList();
+    };
+
+    function backToDrawingsList() {
+      showPage('detail');
+    }
+
+    document.getElementById('add-part-btn').onclick = () => {
+      createPartCard(document.getElementById('parts-container'));
+    };
+
+    // ─── MODAL HELPERS ──────────────────────────────────────────
+    function openMdlModal() { document.getElementById('mdlModal').style.display = 'flex'; }
+    function closeMdlModal() { document.getElementById('mdlModal').style.display = 'none'; }
+    document.getElementById('mdlForm')?.addEventListener('submit', e => {
+      e.preventDefault();
+      const id = document.getElementById('mdl-id').value.trim();
+      if (mdls.some(m => m.id === id)) return alert("ID already exists");
+      const now = new Date().toLocaleString();
+      mdls.push({
+        id,
+        title: document.getElementById('mdl-title').value.trim(),
+        company: document.getElementById('mdl-company').value.trim() || null,
+        revision: document.getElementById('mdl-rev').value.trim() || 'A',
+        created: now,
+        lastUpdated: now,
+        drawings: [],
+        previousRevisions: {}
+      });
+      saveData();
+      renderMdlList(mdls);
+      closeMdlModal();
+    });
+
+    function openDrawingCreateModal() { document.getElementById('drawingCreateModal').style.display = 'flex'; }
+    function closeDrawingCreateModal() { document.getElementById('drawingCreateModal').style.display = 'none'; }
+    document.getElementById('drawingCreateForm')?.addEventListener('submit', e => {
+      e.preventDefault();
+      const number = document.getElementById('new-dwg-number').value.trim();
+      const title = document.getElementById('new-dwg-title').value.trim();
+      const rev = document.getElementById('new-dwg-rev').value.trim() || 'A';
+      if (!number || !title) return;
+      const mdl = findMdl(currentMdlId);
+      if (mdl.drawings.some(d => d.number === number)) return alert("Drawing number already exists");
+      const now = new Date().toLocaleString();
+      const newDwg = {
+        number, title, revision: rev, created: now, lastUpdated: now,
+        mdlRev: currentMdlRev, parts: [], notes: '', previousRevisions: {}
+      };
+      mdl.drawings.push(newDwg);
+      saveData();
+      renderDrawingsList(mdl.drawings.filter(d => d.mdlRev === currentMdlRev));
+      closeDrawingCreateModal();
+      currentDrawingNumber = number;
+      loadDrawingIntoEditor();
+    });
+
+    window.addEventListener('click', e => {
+      if (e.target.classList.contains('modal')) e.target.style.display = 'none';
+    });
+
+    // ─── INITIAL LOAD ────────────────────────────────────────────
+    showPage('list');
+    renderMdlList();
+    </script>
+</body>
+</html>

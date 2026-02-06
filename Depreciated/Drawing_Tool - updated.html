@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Drawing Tool</title>
+    <style>
+        body { font-family: sans-serif; margin: 20px; }
+        .section { border: 1px solid #ccc; padding: 12px; margin-bottom: 20px; }
+        .section h2, .section h3, .section h4 { margin-top: 0; }
+        .row { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; }
+        .column { display: flex; flex-direction: column; gap: 8px; }
+        .workspace { border: 1px dashed #999; padding: 10px; }
+        .placeholder { color: #777; font-style: italic; }
+        .bom-table { width: 100%; border-collapse: collapse; }
+        .bom-table th, .bom-table td { border: 1px solid #ccc; padding: 4px 6px; }
+        .level-1 td:nth-child(3), .level-1 td:nth-child(4) { padding-left: 20px; }
+        .level-2 td:nth-child(3), .level-2 td:nth-child(4) { padding-left: 40px; }
+        .level-3 td:nth-child(3), .level-3 td:nth-child(4) { padding-left: 60px; }
+        .incomplete { background-color: #ffdddd; } /* Red highlight for incomplete */
+        .hidden { display: none; }
+        .part-card { border: 1px solid #ddd; padding: 10px; margin-bottom: 10px; }
+        .child-workspace { margin-left: 20px; }
+    </style>
+</head>
+<body>
+
+<!-- Drawing + Revision Header -->
+<div class="section">
+    <h2>Drawing</h2>
+    <div class="row">
+        <label>Drawing Number</label>
+        <input type="text" id="drawing-number" placeholder="V0092524010">
+    </div>
+    <div class="row">
+        <label>Revision</label>
+        <input type="text" id="revision" placeholder="Auto-filled (e.g. B)">
+        <small class="hint">Editing current revision unless changed</small>
+    </div>
+</div>
+
+<!-- Revision Control Area -->
+<div class="section" id="revision-controls">
+    <h2>Revision Controls</h2>
+    <div class="row">
+        <button id="create-new-revision">Create New Revision</button>
+        <button disabled>Compare Revisions</button>
+    </div>
+    <div class="workspace hidden" id="new-revision-staging">
+        <div class="row">
+            <label>New Revision Label</label>
+            <input type="text" id="new-revision-label" placeholder="e.g. C">
+        </div>
+        <div class="row">
+            <label>Reference Previous Revision</label>
+            <input type="text" id="prev-revision" readonly>
+        </div>
+        <div class="column" id="carry-forward-options">
+            <!-- Checkboxes for carry-over will be dynamically added -->
+        </div>
+        <button id="apply-revision">Apply</button>
+    </div>
+</div>
+
+<!-- Part Builder -->
+<div class="section">
+    <h2>Parts</h2>
+    <button id="add-part">Add Part</button>
+    <div class="workspace" id="parts-workspace"></div>
+</div>
+
+<!-- Notes / Status -->
+<div class="section">
+    <h2>Notes / Status</h2>
+    <textarea rows="4" id="notes" style="width: 100%;" placeholder="Engineering notes, flags, or comments"></textarea>
+</div>
+
+<!-- Live Drawing Preview -->
+<div class="section">
+    <h2>Drawing BOM</h2>
+    <table class="bom-table" id="bom-table">
+        <thead>
+            <tr>
+                <th>DWG</th>
+                <th>Rev</th>
+                <th>Assy</th>
+                <th>Part</th>
+                <th>Description</th>
+                <th>Material</th>
+                <th>Finish</th>
+                <th>Coupon</th>
+            </tr>
+        </thead>
+        <tbody id="bom-body"></tbody>
+    </table>
+</div>
+
+<!-- Action Bar -->
+<div class="section">
+    <div class="row">
+        <button id="save">Save</button>
+        <button id="save-exit">Save & Exit</button>
+        <button id="cancel">Cancel</button>
+    </div>
+</div>
+
+<script>
+    // In-memory data storage (replace with Django API calls later)
+    let drawingData = {
+        number: '',
+        revision: 'A', // Default to latest
+        parts: [], // Array of part objects {number, desc, material, isAssembly, children, hasCoupon, coupon, hasFinish, finish, noteNum}
+        notes: ''
+    };
+    let previousRevisions = {}; // Mock: { 'A': {parts: [...], notes: ''} }
+
+    // Helper to generate unique ID
+    function uuid() { return Math.random().toString(36).slice(2); }
+
+    // Update BOM preview
+    function updateBOM() {
+        const tbody = document.getElementById('bom-body');
+        tbody.innerHTML = '';
+        const dwg = drawingData.number || 'NEW';
+        const rev = drawingData.revision;
+
+        // Top level row
+        const topRow = `<tr class="level-0"><td>${dwg}</td><td>${rev}</td><td>TOP ASSEMBLY</td><td></td><td></td><td></td><td></td><td></td></tr>`;
+        tbody.insertAdjacentHTML('beforeend', topRow);
+
+        // Recursive function to add parts to BOM
+        function addPartToBOM(part, level = 1, assyPrefix = '-') {
+            const assy = `${assyPrefix}${level}`;
+            const partNum = part.number;
+            const desc = part.desc;
+            const mat = part.material;
+            let finish = part.finish || (part.hasFinish ? '' : 'N/A');
+            let coupon = part.coupon || (part.hasCoupon ? '' : 'N/A');
+            const finishClass = part.hasFinish && !part.finish ? 'incomplete' : '';
+            const couponClass = part.hasCoupon && !part.coupon ? 'incomplete' : '';
+
+            const row = `<tr class="level-${level}"><td></td><td></td><td>${assy}</td><td>${partNum}</td><td>${desc}</td><td>${mat}</td><td class="${finishClass}">${finish}</td><td class="${couponClass}">${coupon}</td></tr>`;
+            tbody.insertAdjacentHTML('beforeend', row);
+
+            if (part.isAssembly && part.children) {
+                part.children.forEach((child, idx) => addPartToBOM(child, level + 1, `${assy}-`));
+            }
+        }
+
+        drawingData.parts.forEach((part, idx) => addPartToBOM(part, 1, '-'));
+    }
+
+    // Create a part card UI
+    function createPartCard(parentWorkspace, isChild = false, parentId = null) {
+        const partId = uuid();
+        const card = document.createElement('div');
+        card.className = 'part-card';
+        card.dataset.id = partId;
+        card.innerHTML = `
+            <h3>${isChild ? 'Child Part' : 'Part'}</h3>
+            <div class="row"><label>Part Number</label><input type="text" class="part-number" placeholder="NB220-0155-500"></div>
+            <div class="row"><label>Description</label><input type="text" class="part-desc" placeholder="0.5in Norbond Panel"></div>
+            <div class="row"><label>Material (optional)</label><input type="text" class="part-material" placeholder="Norbond, Aluminum, etc"></div>
+            <div class="row"><label><input type="checkbox" class="is-assembly"> This part is an assembly</label></div>
+            <div class="child-workspace hidden"></div>
+            <div class="section">
+                <h4>Coupon / Classification</h4>
+                <div class="row"><label><input type="checkbox" class="has-coupon"> This part has a coupon / classification</label></div>
+                <div class="row hidden coupon-input"><input type="text" class="coupon-value" placeholder="e.g. SPE, PMA, Hardware, Metal Part" style="width: 300px;"></div>
+            </div>
+            <div class="section">
+                <h4>Finishes</h4>
+                <label><input type="checkbox" class="has-finish"> This part requires a finish</label>
+                <div class="row"><label><input type="checkbox" class="notes-apply"> Notes apply</label><input type="number" class="note-num" placeholder="Note #" style="width:80px;"></div>
+                <div class="workspace finish-workspace hidden">
+                    <input type="text" class="finish-value" placeholder="Finish details">
+                </div>
+            </div>
+            <button class="remove-part">Remove</button>
+        `;
+
+        parentWorkspace.appendChild(card);
+
+        // Find parent part if child
+        let targetArray = drawingData.parts;
+        if (parentId) {
+            const parentPart = findPartById(drawingData.parts, parentId);
+            if (parentPart) targetArray = parentPart.children = parentPart.children || [];
+        }
+
+        // Add to data
+        const newPart = { id: partId, number: '', desc: '', material: '', isAssembly: false, children: [], hasCoupon: false, coupon: '', hasFinish: false, finish: '', noteNum: '' };
+        targetArray.push(newPart);
+
+        // Event listeners
+        card.querySelector('.part-number').addEventListener('input', e => { newPart.number = e.target.value; updateBOM(); });
+        card.querySelector('.part-desc').addEventListener('input', e => { newPart.desc = e.target.value; updateBOM(); });
+        card.querySelector('.part-material').addEventListener('input', e => { newPart.material = e.target.value; updateBOM(); });
+        card.querySelector('.is-assembly').addEventListener('change', e => {
+            newPart.isAssembly = e.target.checked;
+            const childWs = card.querySelector('.child-workspace');
+            childWs.classList.toggle('hidden', !e.target.checked);
+            if (e.target.checked) {
+                const addChildBtn = document.createElement('button');
+                addChildBtn.textContent = 'Add Child Part';
+                addChildBtn.addEventListener('click', () => createPartCard(childWs, true, partId));
+                childWs.appendChild(addChildBtn);
+            }
+            updateBOM();
+        });
+        card.querySelector('.has-coupon').addEventListener('change', e => {
+            newPart.hasCoupon = e.target.checked;
+            card.querySelector('.coupon-input').classList.toggle('hidden', !e.target.checked);
+            updateBOM();
+        });
+        card.querySelector('.coupon-value').addEventListener('input', e => { newPart.coupon = e.target.value; updateBOM(); });
+        card.querySelector('.has-finish').addEventListener('change', e => {
+            newPart.hasFinish = e.target.checked;
+            card.querySelector('.finish-workspace').classList.toggle('hidden', !e.target.checked);
+            updateBOM();
+        });
+        card.querySelector('.finish-value').addEventListener('input', e => { newPart.finish = e.target.value; updateBOM(); });
+        card.querySelector('.note-num').addEventListener('input', e => { newPart.noteNum = e.target.value; updateBOM(); });
+        card.querySelector('.remove-part').addEventListener('click', () => {
+            card.remove();
+            const index = targetArray.findIndex(p => p.id === partId);
+            if (index > -1) targetArray.splice(index, 1);
+            updateBOM();
+        });
+
+        // Validation on blur
+        const inputs = card.querySelectorAll('input[type="text"], input[type="number"]');
+        inputs.forEach(input => input.addEventListener('blur', updateBOM));
+
+        updateBOM();
+        return card;
+    }
+
+    // Helper to find part by ID (recursive)
+    function findPartById(parts, id) {
+        for (let part of parts) {
+            if (part.id === id) return part;
+            if (part.children) {
+                const found = findPartById(part.children, id);
+                if (found) return found;
+            }
+        }
+        return null;
+    }
+
+    // Init event listeners
+    document.getElementById('drawing-number').addEventListener('blur', e => {
+        drawingData.number = e.target.value;
+        // Mock auto-load: if exists, load data (replace with API)
+        if (e.target.value === 'V0092524010') { // Mock existing
+            drawingData.revision = 'B';
+            document.getElementById('revision').value = 'B';
+            // Load mock parts, etc.
+        } else {
+            // New drawing: auto-focus revision
+            document.getElementById('revision').focus();
+        }
+        updateBOM();
+    });
+
+    document.getElementById('revision').addEventListener('input', e => {
+        const newRev = e.target.value;
+        if (newRev !== drawingData.revision) {
+            document.getElementById('revision-controls').classList.remove('hidden');
+            document.getElementById('new-revision-staging').classList.remove('hidden');
+            document.getElementById('prev-revision').value = drawingData.revision;
+            document.getElementById('new-revision-label').value = newRev;
+
+            // Carry-forward options
+            const carryOpts = document.getElementById('carry-forward-options');
+            carryOpts.innerHTML = `
+                <label><input type="checkbox" checked data-carry="parts"> Carry forward parts</label>
+                <label><input type="checkbox" checked data-carry="notes"> Carry forward notes</label>
+            `;
+        } else {
+            document.getElementById('new-revision-staging').classList.add('hidden');
+        }
+    });
+
+    document.getElementById('apply-revision').addEventListener('click', () => {
+        const newRev = document.getElementById('new-revision-label').value;
+        const prevRev = drawingData.revision;
+        previousRevisions[prevRev] = { ...drawingData }; // Save previous
+
+        drawingData.revision = newRev;
+        document.getElementById('revision').value = newRev;
+
+        // Carry forward based on checkboxes
+        const carryParts = document.querySelector('[data-carry="parts"]').checked;
+        const carryNotes = document.querySelector('[data-carry="notes"]').checked;
+        if (!carryParts) drawingData.parts = [];
+        if (!carryNotes) drawingData.notes = '';
+
+        document.getElementById('new-revision-staging').classList.add('hidden');
+        // Re-render parts UI if carried
+        const partsWs = document.getElementById('parts-workspace');
+        partsWs.innerHTML = '';
+        drawingData.parts.forEach(part => createPartCard(partsWs)); // Recursive re-create if assemblies
+        updateBOM();
+    });
+
+    document.getElementById('add-part').addEventListener('click', () => createPartCard(document.getElementById('parts-workspace')));
+
+    document.getElementById('notes').addEventListener('input', e => { drawingData.notes = e.target.value; });
+
+    // Action buttons (mock)
+    document.getElementById('save').addEventListener('click', () => console.log('Saved:', drawingData)); // Replace with Django POST
+    document.getElementById('save-exit').addEventListener('click', () => { console.log('Saved & Exit:', drawingData); window.close(); });
+    document.getElementById('cancel').addEventListener('click', () => { drawingData = { number: '', revision: 'A', parts: [], notes: '' }; location.reload(); });
+
+    // Initial setup
+    document.getElementById('revision').value = drawingData.revision;
+    document.getElementById('revision-controls').classList.add('hidden'); // Hidden by default
+    updateBOM();
+</script>
+</body>
+</html>

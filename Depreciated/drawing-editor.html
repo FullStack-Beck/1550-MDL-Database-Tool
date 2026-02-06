@@ -1,0 +1,687 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Drawing Editor</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f5f5f5;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+
+        .row {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+
+        .drawing-section {
+            border: 1px solid #ddd;
+            padding: 16px;
+            margin-bottom: 24px;
+            background: #fff;
+            border-radius: 8px;
+        }
+
+        .workspace {
+            border: 1px dashed #aaa;
+            padding: 12px;
+            background: #fafafa;
+            border-radius: 6px;
+        }
+
+        .part-card {
+            border: 1px solid #ccc;
+            padding: 12px;
+            margin: 12px 0;
+            border-radius: 6px;
+            background: #fff;
+        }
+
+            .part-card h4 {
+                cursor: pointer;
+                margin: 0;
+                padding-bottom: 8px;
+                border-bottom: 1px solid #eee;
+            }
+
+        .part-details {
+            margin-top: 12px;
+        }
+
+        .child-workspace {
+            margin-left: 24px;
+        }
+
+        .bom-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.95rem;
+        }
+
+            .bom-table th, .bom-table td {
+                border: 1px solid #ddd;
+                padding: 8px;
+            }
+
+        .incomplete {
+            background-color: #fff0f0;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .carry-over-list {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 8px;
+            border-radius: 4px;
+            background: #f9f9f9;
+        }
+
+        button {
+            padding: 8px 14px;
+            background: #0066cc;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+            button:hover {
+                background: #0055aa;
+            }
+
+        .create-btn {
+            background: #28a745;
+        }
+
+            .create-btn:hover {
+                background: #218838;
+            }
+
+        .remove-part {
+            background: #dc3545 !important;
+        }
+
+        small {
+            color: #666;
+            margin-left: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div style="margin-bottom:1.5rem; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+            <button onclick="backToDrawingsList()">← Back to Drawings</button>
+            <div class="row">
+                <h2 id="drawingEditorTitle">Drawing Editor</h2>
+                <label>Revision: </label>
+                <select id="dwgRevSelector" onchange="changeDwgRevision(this.value)"></select>
+            </div>
+            <div>
+                <button id="saveDrawingBtn">Save</button>
+                <button id="saveExitDrawingBtn">Save & Back</button>
+                <button onclick="backToDrawingsList()">Cancel</button>
+            </div>
+        </div>
+        <!-- Drawing info -->
+        <div class="drawing-section">
+            <h3>Drawing</h3>
+            <div class="row">
+                <label style="min-width:140px;">Drawing Number</label>
+                <input type="text" id="dwg-number" style="flex:1;">
+            </div>
+            <div class="row">
+                <label style="min-width:140px;">Title / Description</label>
+                <input type="text" id="dwg-title" style="flex:1;">
+            </div>
+            <div class="row">
+                <!-- Optional: small text field to create new revision -->
+                <input type="text" id="new-rev-input" placeholder="New rev..." style="width:90px;">
+                <button id="start-new-rev-btn" style="background:#ffc107; color:black;">New Revision</button>
+            </div>
+        </div>
+        <!-- Carry-over panel (shown when creating new revision) -->
+        <div class="drawing-section hidden" id="revision-controls-area">
+            <h3>New Revision – Carry-over Options</h3>
+            <div id="new-revision-area" class="workspace">
+                <div class="row">
+                    <label style="min-width:140px;">Target Revision</label>
+                    <input type="text" id="new-rev-label" style="width:120px;" readonly>
+                </div>
+                <div class="row">
+                    <label style="min-width:140px;">From Revision</label>
+                    <input type="text" id="prev-rev" readonly>
+                </div>
+                <div style="margin:16px 0;">
+                    <label><input type="checkbox" id="carry-all-parts" checked> Carry ALL parts & sub-assemblies</label><br>
+                    <label><input type="checkbox" id="carry-notes" checked> Carry notes / status</label>
+                </div>
+                <div style="margin-top:1rem;">
+                    <strong>Or selectively carry specific parts:</strong>
+                    <div id="carry-parts-selector" class="carry-over-list" style="margin-top:8px;"></div>
+                </div>
+                <div style="margin-top:1.5rem;">
+                    <button id="apply-revision-btn" style="background:#28a745; padding:10px 20px;">Apply & Switch</button>
+                    <button onclick="hideRevisionControls()" style="margin-left:12px;">Cancel</button>
+                </div>
+            </div>
+        </div>
+        <!-- Parts -->
+        <div class="drawing-section">
+            <h3>Parts</h3>
+            <button id="add-part-btn" class="create-btn">+ Add Part</button>
+            <div id="parts-container" class="workspace"></div>
+        </div>
+        <!-- Notes -->
+        <div class="drawing-section">
+            <h3>Notes / Status</h3>
+            <textarea id="dwg-notes" rows="4" style="width:100%;"></textarea>
+        </div>
+        <!-- BOM -->
+        <div class="drawing-section">
+            <h3>Drawing BOM Preview</h3>
+            <table class="bom-table">
+                <thead>
+                    <tr><th>DWG</th><th>Rev</th><th>Assy</th><th>Part</th><th>Description</th><th>Material</th><th>Finish</th><th>Coupon</th></tr>
+                </thead>
+                <tbody id="bom-tbody"></tbody>
+            </table>
+        </div>
+    </div>
+    <script>
+        // ─── SHARED ──────────────────────────────────────────────────
+        const STORAGE_KEY = 'engineering_mdl_drawings';
+        let mdls = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+        function saveData() { localStorage.setItem(STORAGE_KEY, JSON.stringify(mdls)); }
+        function uuid() { return Math.random().toString(36).slice(2, 10); }
+        function findMdl(id) { return mdls.find(m => m.id === id); }
+        function findDrawing(mdlId, dwgNum) {
+            const mdl = findMdl(mdlId);
+            return mdl ? mdl.drawings.find(d => d.number === dwgNum) : null;
+        }
+        function findPartById(parts, id) {
+            for (let p of parts) {
+                if (p.id === id) return p;
+                if (p.children) {
+                    const found = findPartById(p.children, id);
+                    if (found) return found;
+                }
+            }
+            return null;
+        }
+        // ─── PARAMS ─────────────────────────────────────────────────
+        const params = new URLSearchParams(window.location.search);
+        // Auto-trigger new revision carry-over panel when arriving from pending row
+        if (params.get('carryover') === 'auto') {
+            const targetNewRev = params.get('newrev');
+            if (targetNewRev) {
+                const input = document.getElementById('new-rev-input');
+                if (input) {
+                    input.value = targetNewRev;
+
+                    // Trigger the click handler directly (safer than .click() in some cases)
+                    setTimeout(() => {
+                        const btn = document.getElementById('start-new-rev-btn');
+                        if (btn && typeof btn.onclick === 'function') {
+                            btn.onclick();  // directly call the handler function
+                        } else if (btn) {
+                            btn.click();    // fallback
+                        }
+                    }, 150);  // small delay — enough for DOM + loadDrawingIntoEditor to finish
+                }
+            }
+        }
+        const mdlId = params.get('mdl');
+        const dwgNum = params.get('dwg');
+        if (!mdlId || !dwgNum) {
+            alert("Missing parameters");
+            window.location.href = "index.html";
+        }
+        let currentMdlId = mdlId;
+        let currentDrawingNumber = dwgNum;
+        let drawingData = {
+            number: '',
+            revision: 'A',
+            parts: [],
+            notes: ''
+        };
+        // ─── REVISION SELECTOR ──────────────────────────────────────
+        function populateDwgRevSelector(dwg) {
+            const select = document.getElementById('dwgRevSelector');
+            select.innerHTML = '';
+            const revs = [dwg.revision, ...Object.keys(dwg.previousRevisions || {})].sort();
+            revs.forEach(r => {
+                const opt = document.createElement('option');
+                opt.value = r;
+                opt.text = r;
+                if (r === drawingData.revision) opt.selected = true;
+                select.appendChild(opt);
+            });
+        }
+        function changeDwgRevision(rev) {
+            const dwg = findDrawing(currentMdlId, currentDrawingNumber);
+            const revData = rev === dwg.revision ? dwg : (dwg.previousRevisions?.[rev] || {});
+            drawingData.revision = rev;
+            drawingData.parts = JSON.parse(JSON.stringify(revData.parts || []));
+            drawingData.notes = revData.notes || '';
+            document.getElementById('dwg-notes').value = drawingData.notes;
+            const partsWs = document.getElementById('parts-container');
+            partsWs.innerHTML = '';
+            drawingData.parts.forEach(p => createPartCard(partsWs, false, null, p));
+            updateBOM();
+            hideRevisionControls();
+        }
+        // ─── NEW REVISION FLOW ──────────────────────────────────────
+        document.getElementById('start-new-rev-btn').onclick = () => {
+            const newRev = document.getElementById('new-rev-input').value.trim();
+            if (!newRev) {
+                alert("Enter a new revision label");
+                return;
+            }
+            if (newRev === drawingData.revision) {
+                alert("That's the current revision");
+                return;
+            }
+            showRevisionControls(newRev);
+        };
+        function showRevisionControls(targetRev) {
+            document.getElementById('revision-controls-area').classList.remove('hidden');
+            document.getElementById('new-rev-label').value = targetRev;
+            document.getElementById('prev-rev').value = drawingData.revision;
+            const container = document.getElementById('carry-parts-selector');
+            container.innerHTML = '';
+            const dwg = findDrawing(currentMdlId, currentDrawingNumber);
+            const allPrevParts = [];
+            drawingData.parts.forEach(p => allPrevParts.push({ ...p, sourceRev: drawingData.revision }));
+            Object.entries(dwg.previousRevisions || {}).forEach(([rev, data]) => {
+                (data.parts || []).forEach(p => allPrevParts.push({ ...p, sourceRev: rev }));
+            });
+            if (allPrevParts.length === 0) {
+                container.innerHTML = '<p style="color:#777;">No previous parts available.</p>';
+                return;
+            }
+            allPrevParts.forEach((part, i) => {
+                const label = document.createElement('label');
+                label.style.display = 'block';
+                label.style.marginBottom = '6px';
+                label.innerHTML = `
+                        <input type="checkbox" class="carry-part-cb" data-index="${i}" checked>
+                        ${part.number || '?'} – ${part.desc || '(no description)'}
+                        <small>(rev ${part.sourceRev})</small>
+                    `;
+                container.appendChild(label);
+            });
+        }
+        function hideRevisionControls() {
+            document.getElementById('revision-controls-area').classList.add('hidden');
+        }
+        document.getElementById('apply-revision-btn').onclick = () => {
+            const targetRev = document.getElementById('new-rev-label').value.trim();
+            if (!targetRev) return alert("Revision label missing");
+            const dwg = findDrawing(currentMdlId, currentDrawingNumber);
+            if (!dwg) return;
+            // Save current → previous
+            if (!dwg.previousRevisions) dwg.previousRevisions = {};
+            dwg.previousRevisions[drawingData.revision] = {
+                parts: JSON.parse(JSON.stringify(drawingData.parts)),
+                notes: drawingData.notes
+            };
+            // Switch
+            drawingData.revision = targetRev;
+            dwg.revision = targetRev;
+            const keepAll = document.getElementById('carry-all-parts').checked;
+            const keepNotes = document.getElementById('carry-notes').checked;
+            if (!keepNotes) {
+                drawingData.notes = '';
+                document.getElementById('dwg-notes').value = '';
+            }
+            let newParts = keepAll ? JSON.parse(JSON.stringify(drawingData.parts)) : [];
+            // Selective carry
+            const selected = Array.from(document.querySelectorAll('.carry-part-cb:checked'))
+                .map(cb => parseInt(cb.dataset.index));
+            const allPrev = [];
+            drawingData.parts.forEach(p => allPrev.push({ ...p }));
+            Object.values(dwg.previousRevisions || {}).forEach(r => r.parts?.forEach(p => allPrev.push({ ...p })));
+            selected.forEach(i => {
+                if (allPrev[i]) newParts.push(allPrev[i]);
+            });
+            drawingData.parts = newParts;
+            // Refresh
+            const partsWs = document.getElementById('parts-container');
+            partsWs.innerHTML = '';
+            drawingData.parts.forEach(p => createPartCard(partsWs, false, null, p));
+            collapseAllPartCards();
+            updateBOM();
+            populateDwgRevSelector(dwg);
+            hideRevisionControls();
+            saveData();
+            alert(`Switched to revision ${targetRev}`);
+        };
+        // ─── PART CARD (same as original) ───────────────────────────
+        function createPartCard(parentWs, isChild = false, parentId = null, existing = null) {
+            const partId = existing?.id || uuid();
+            const card = document.createElement('div');
+            card.className = 'part-card';
+            card.dataset.id = partId;
+            card.innerHTML = `
+                    <h4>${isChild ? 'Child Part' : 'Part'}</h4>
+                    <div class="part-details">
+                        <div class="row"><label>Part Number</label><input type="text" class="p-num" value="${existing?.number || ''}"></div>
+                        <div class="row"><label>Description</label> <input type="text" class="p-desc" value="${existing?.desc || ''}"></div>
+                        <div class="row"><label>Material</label> <input type="text" class="p-mat" value="${existing?.material || ''}"></div>
+                        <div class="row">
+                            <label><input type="checkbox" class="p-asm" ${existing?.isAssembly ? 'checked' : ''}> Assembly</label>
+                        </div>
+                        <div class="child-workspace ${existing?.isAssembly ? '' : 'hidden'}"></div>
+                        <div>
+                            <strong>Coupon</strong><br>
+                            <label><input type="checkbox" class="p-coup-chk" ${existing?.hasCoupon ? 'checked' : ''}> Has coupon</label>
+                            <div id="coupon-div-${partId}" class="row ${existing?.hasCoupon ? '' : 'hidden'}">
+                                <input type="text" class="p-coup-val" value="${existing?.coupon || ''}" placeholder="e.g. Hardware">
+                            </div>
+                        </div>
+                        <div>
+                            <strong>Finish</strong><br>
+                            <label><input type="checkbox" class="p-finish-chk" ${existing?.hasFinish ? 'checked' : ''}> Requires finish</label>
+                            <div id="finish-div-${partId}" class="${existing?.hasFinish ? '' : 'hidden'}">
+                                <input type="text" class="p-finish-val" value="${existing?.finish || ''}" placeholder="e.g. Anodize Type II">
+                            </div>
+                        </div>
+                        <button class="remove-part" style="margin-top:8px;">Remove</button>
+                    </div>
+                `;
+            parentWs.appendChild(card);
+            let targetArray = drawingData.parts;
+            if (parentId) {
+                const parent = findPartById(drawingData.parts, parentId);
+                if (parent) targetArray = parent.children = parent.children || [];
+            }
+            const partObj = existing || {
+                id: partId, number: '', desc: '', material: '',
+                isAssembly: false, children: [],
+                hasCoupon: false, coupon: '',
+                hasFinish: false, finish: ''
+            };
+            if (!existing) targetArray.push(partObj);
+            const header = card.querySelector('h4');
+            const details = card.querySelector('.part-details');
+            header.onclick = () => details.classList.toggle('hidden');
+            card.querySelector('.p-num').oninput = e => { partObj.number = e.target.value; updateBOM(); };
+            card.querySelector('.p-desc').oninput = e => { partObj.desc = e.target.value; updateBOM(); };
+            card.querySelector('.p-mat').oninput = e => { partObj.material = e.target.value; updateBOM(); };
+            card.querySelector('.p-asm').onchange = e => {
+                partObj.isAssembly = e.target.checked;
+                const cw = card.querySelector('.child-workspace');
+                cw.classList.toggle('hidden', !e.target.checked);
+                if (e.target.checked && !cw.querySelector('button')) {
+                    const btn = document.createElement('button');
+                    btn.textContent = '+ Add Child Part';
+                    btn.className = 'create-btn';
+                    btn.onclick = () => createPartCard(cw, true, partId);
+                    cw.insertBefore(btn, cw.firstChild);
+                }
+                updateBOM();
+            };
+            card.querySelector('.p-coup-chk').onchange = e => {
+                partObj.hasCoupon = e.target.checked;
+                document.getElementById(`coupon-div-${partId}`).classList.toggle('hidden', !e.target.checked);
+                updateBOM();
+            };
+            card.querySelector('.p-coup-val').oninput = e => { partObj.coupon = e.target.value; updateBOM(); };
+            card.querySelector('.p-finish-chk').onchange = e => {
+                partObj.hasFinish = e.target.checked;
+                document.getElementById(`finish-div-${partId}`).classList.toggle('hidden', !e.target.checked);
+                updateBOM();
+            };
+            card.querySelector('.p-finish-val').oninput = e => { partObj.finish = e.target.value; updateBOM(); };
+            card.querySelector('.p-finish-val').onblur = () => {
+                if (partObj.number && partObj.desc) details.classList.add('hidden');
+            };
+            card.querySelector('.remove-part').onclick = () => {
+                card.remove();
+                const idx = targetArray.findIndex(p => p.id === partId);
+                if (idx > -1) targetArray.splice(idx, 1);
+                updateBOM();
+            };
+            if (partObj.isAssembly && partObj.children?.length) {
+                const cw = card.querySelector('.child-workspace');
+                cw.classList.remove('hidden');
+                if (!cw.querySelector('button')) {
+                    const btn = document.createElement('button');
+                    btn.textContent = '+ Add Child';
+                    btn.className = 'create-btn';
+                    btn.onclick = () => createPartCard(cw, true, partId);
+                    cw.appendChild(btn);
+                }
+                partObj.children.forEach(c => createPartCard(cw, true, partId, c));
+            }
+        }
+        function collapseAllPartCards() {
+            document.querySelectorAll('.part-details').forEach(d => d.classList.add('hidden'));
+        }
+        // ─── BOM ─────────────────────────────────────────────────────
+        function updateBOM() {
+            // Get the table body element — this is where we add all rows
+            const tbody = document.getElementById('bom-tbody');
+
+            // Clear the table body so we start fresh each time (prevents old rows from staying)
+            tbody.innerHTML = '';
+
+            // Drawing number (or 'NEW' if empty) — used in top row
+            const dwgNum = drawingData.number || 'NEW';
+
+            // Revision (or '—' if empty) — used in top row
+            const rev = drawingData.revision || '—';
+
+            // Add the top row (the drawing's title row) — this is always first, never duplicated
+            tbody.innerHTML += `
+            <tr style="font-weight: bold; background: #e9ecef;">
+                <td>${dwgNum}</td>
+                <td>${rev}</td>
+                <td></td>
+                <td></td>
+                <td>${drawingData.title || '(no title)'}</td>
+                <td></td>
+                <td></td>
+                <td></td>
+            </tr>`;
+
+            // This array collects sub-assemblies (assemblies inside other assemblies) so we can show them again later
+            const nestedAssemblies = [];
+
+            // This function renders one level of items (top-level or inside an assembly)
+            function renderLevel(parts, level = 1, parentAssy = '') {
+                // Loop through every part/assembly in this level
+                parts.forEach(part => {
+                    // Check if this item is an assembly (checkbox was ticked)
+                    const isAsm = part.isAssembly;
+
+                    // These variables decide what goes in each column for this row
+                    let assyCol = '';
+                    let partCol = part.number || '';
+                    let couponCol = part.hasCoupon ? (part.coupon || '') : '—';
+
+                    // If it's an assembly, make this row look like a "reference" row
+                    // → number in Assy, empty Part, "See Assy" in Coupon
+                    // This creates the row you WANT under the parent (the part reference)
+                    if (isAsm) {
+                        assyCol = part.number || '';
+                        partCol = '';
+                        couponCol = 'See Assy';
+                    }
+
+                    // Check if finish or coupon fields are missing (turns cell red)
+                    const fCls = part.hasFinish && !part.finish ? 'incomplete' : '';
+                    const cCls = part.hasCoupon && !part.coupon ? 'incomplete' : '';
+                    const fVal = part.hasFinish ? (part.finish || '') : '—';
+
+                    // Add spaces for indentation (deeper level = more spaces)
+                    const indent = ' '.repeat(level - 1);
+
+                    // Add this item's row to the table
+                    // This is the "part reference" row for assemblies — you want this
+                    tbody.innerHTML += `
+                    <tr>
+                        <td></td>
+                        <td></td>
+                        <td>${indent}${assyCol}</td>
+                        <td>${partCol}</td>
+                        <td>${part.desc || ''}</td>
+                        <td>${part.material || ''}</td>
+                        <td class="${fCls}">${fVal}</td>
+                        <td class="${cCls}">${couponCol}</td>
+                    </tr>`;
+
+                    
+                    if (isAsm && part.children?.length > 0) {
+                        part.children.forEach(child => {
+                            if (child.isAssembly) {
+                                // 1️⃣ Render the assembly reference row under the parent
+                                renderChild(
+                                    {
+                                        ...child,
+                                        isAssembly: true   // force "See Assy" behavior
+                                    },
+                                    level + 1
+                                );
+
+                                // 2️⃣ Defer full rendering of the sub-assembly
+                                nestedAssemblies.push(child);
+                            } else {
+                                // Render normal parts inline under parent
+                                renderChild(child, level + 1);
+                            }
+                        });
+                    }
+
+                });
+            }
+
+            // This function renders individual children (used for both top-level and sub-assembly children)
+            function renderChild(child, level) {
+                // Check if this child is an assembly
+                const isChildAsm = child.isAssembly;
+
+                let assyCol = '';
+                let partCol = child.number || '';
+                let couponCol = child.hasCoupon ? (child.coupon || '') : '—';
+
+                // If child is assembly → set "See Assy" coupon
+                if (isChildAsm) {
+                    couponCol = 'See Assy';
+                }
+
+                const fCls = child.hasFinish && !child.finish ? 'incomplete' : '';
+                const cCls = child.hasCoupon && !child.coupon ? 'incomplete' : '';
+                const fVal = child.hasFinish ? (child.finish || '') : '—';
+
+                const indent = ' '.repeat(level - 1);
+
+                // Add the row for this child
+                tbody.innerHTML += `
+                <tr>
+                    <td></td>
+                    <td></td>
+                    <td>${indent}${assyCol}</td>
+                    <td>${partCol}</td>
+                    <td>${child.desc || ''}</td>
+                    <td>${child.material || ''}</td>
+                    <td class="${fCls}">${fVal}</td>
+                    <td class="${cCls}">${couponCol}</td>
+                </tr>`;
+            }
+
+            // Start the rendering process from the top level
+            renderLevel(drawingData.parts);
+
+            // Now add the full sections for all collected sub-assemblies
+            nestedAssemblies.forEach(subAsm => {
+                // Add the header row for this sub-assembly (this is the second appearance you want)
+                tbody.innerHTML += `
+                <tr style="background: #f8f9fa; font-weight: bold;">
+                    <td></td>
+                    <td></td>
+                    <td>${subAsm.number || ''}</td>
+                    <td></td>
+                    <td>${subAsm.desc || '(sub-assembly)'}</td>
+                    <td>${subAsm.material || ''}</td>
+                    <td></td>
+                    <td>See Assy</td>
+                </tr>`;
+
+                // Render this sub-assembly's children indented under its header
+                // This is the ONLY place where children of sub-assemblies (like 85 under -5) should appear
+                if (subAsm.children?.length > 0) {
+                    subAsm.children.forEach(child => renderChild(child, 2)); // level 2 = one indent under header
+                }
+            });
+        }
+        // ─── SAVE ────────────────────────────────────────────────────
+        document.getElementById('saveDrawingBtn').onclick = () => {
+            const dwg = findDrawing(currentMdlId, currentDrawingNumber);
+            if (!dwg) return;
+            dwg.title = document.getElementById('dwg-title').value.trim();
+            dwg.number = document.getElementById('dwg-number').value.trim();
+            dwg.revision = drawingData.revision;
+            dwg.notes = document.getElementById('dwg-notes').value;
+            dwg.parts = JSON.parse(JSON.stringify(drawingData.parts));
+            dwg.lastUpdated = new Date().toLocaleString();
+            saveData();
+            alert("Drawing saved.");
+        };
+        document.getElementById('saveExitDrawingBtn').onclick = () => {
+            document.getElementById('saveDrawingBtn').click();
+            backToDrawingsList();
+        };
+        function backToDrawingsList() {
+            window.location.href = `mdl-detail.html?id=${encodeURIComponent(currentMdlId)}`;
+        }
+        // ─── ADD PART ────────────────────────────────────────────────
+        document.getElementById('add-part-btn').onclick = () => {
+            createPartCard(document.getElementById('parts-container'));
+        };
+        // ─── LOAD ────────────────────────────────────────────────────
+        function loadDrawingIntoEditor() {
+            const dwg = findDrawing(currentMdlId, currentDrawingNumber);
+            if (!dwg) {
+                alert("Drawing not found");
+                window.location.href = `mdl-detail.html?id=${encodeURIComponent(currentMdlId)}`;
+                return;
+            }
+            drawingData = {
+                number: dwg.number,
+                title: dwg.title,
+                revision: dwg.revision || 'A',
+                parts: JSON.parse(JSON.stringify(dwg.parts || [])),
+                notes: dwg.notes || ''
+            };
+            document.getElementById('dwg-title').value = drawingData.title;
+            document.getElementById('dwg-number').value = drawingData.number;
+            document.getElementById('dwg-notes').value = drawingData.notes;
+            document.getElementById('drawingEditorTitle').textContent = `Drawing: ${drawingData.number}`;
+            const partsWs = document.getElementById('parts-container');
+            partsWs.innerHTML = '';
+            drawingData.parts.forEach(p => createPartCard(partsWs, false, null, p));
+            populateDwgRevSelector(dwg);
+            updateBOM();
+            hideRevisionControls();
+        }
+        loadDrawingIntoEditor();
+    </script>
+</body>
+</html>

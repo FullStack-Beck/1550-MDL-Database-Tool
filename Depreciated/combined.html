@@ -1,0 +1,1022 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MDL & Drawing Manager (Local Storage)</title>
+    <!-- ─── CSS STYLES ──────────────────────────────────────────────────────────────── -->
+    <!-- Controls ALL visual appearance of the app (layout, colors, spacing, etc.) -->
+    <style>
+        /* Global page look & feel */
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f5f5f5;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+        /* Header (top title area) */
+        header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+        /* Search + button bars used on multiple screens */
+        .search-bar {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+        }
+        /* Form inputs & buttons styling */
+        input[type="search"], input[type="text"], button, textarea, select {
+            padding: 10px 14px;
+            font-size: 1rem;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+        }
+
+        input[type="search"] {
+            flex: 1;
+            min-width: 250px;
+        }
+
+        button {
+            background: #0066cc;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+
+            button:hover {
+                background: #0055aa;
+            }
+
+        .create-btn {
+            background: #28a745;
+            padding: 10px 20px;
+        }
+
+            .create-btn:hover {
+                background: #218838;
+            }
+        /* Main content sections (white cards) */
+        section {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            min-height: 200px;
+        }
+        /* Tables (MDL list + Drawings list) */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+
+        th {
+            background: #f0f0f0;
+        }
+
+        tr {
+            cursor: pointer;
+        }
+
+            tr:hover {
+                background: #f8f9fa;
+            }
+        /* Modal popups (create MDL, create drawing, new revision) */
+        .modal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.5);
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 600px;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .close {
+            float: right;
+            font-size: 2rem;
+            cursor: pointer;
+            color: #aaa;
+        }
+
+            .close:hover {
+                color: #333;
+            }
+        /* Drawing editor specific styles */
+        .drawing-section {
+            border: 1px solid #ddd;
+            padding: 16px;
+            margin-bottom: 24px;
+            background: #fff;
+            border-radius: 8px;
+        }
+
+        .row {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+
+        .workspace {
+            border: 1px dashed #aaa;
+            padding: 12px;
+            background: #fafafa;
+            border-radius: 6px;
+        }
+
+        .part-card {
+            border: 1px solid #ccc;
+            padding: 12px;
+            margin: 12px 0;
+            border-radius: 6px;
+            background: #fff;
+        }
+
+            .part-card h4 {
+                cursor: pointer; /* FIX: Make header clickable for accordion toggle */
+                margin: 0;
+                padding-bottom: 8px;
+                border-bottom: 1px solid #eee;
+            }
+
+        .part-details {
+            margin-top: 12px; /* FIX: Wrapper for collapsible content */
+        }
+
+        .child-workspace {
+            margin-left: 24px;
+        }
+
+        .bom-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.95rem;
+        }
+
+            .bom-table th, .bom-table td {
+                border: 1px solid #ddd;
+                padding: 8px;
+            }
+
+        .incomplete {
+            background-color: #fff0f0;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .carry-over-list {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 8px;
+            border-radius: 4px;
+            background: #f9f9f9;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- ─── HEADER ──────────────────────────────────────────────────────────────── -->
+        <!-- Visible on every screen at the top -->
+        <header>
+            <h1>MDL & Drawing Manager</h1>
+            <p>Local Storage – data saved in your browser</p>
+        </header>
+        <!-- ─── SCREEN 1: MDL List View ──────────────────────────────────────────────── -->
+        <!-- Main screen when you first open the app -->
+        <div id="mdlListView">
+            <!-- Search + Create buttons (top bar) -->
+            <div class="search-bar">
+                <input type="search" id="searchInput" placeholder="Search MDLs by ID, title, company..." aria-label="Search MDLs">
+                <button class="create-btn" onclick="openMdlModal()">+ Create New MDL</button>
+            </div>
+            <section id="mdlResults">
+                <h2>Master Data Lists</h2>
+                <p id="no-results">No MDLs yet. Create one to get started!</p>
+                <table id="mdlTable" style="display:none;">
+                    <thead><tr><th>MDL ID</th><th>Title</th><th>Company</th><th>Revision</th><th>Created</th></tr></thead>
+                    <tbody id="mdlBody"></tbody>
+                </table>
+            </section>
+        </div>
+        <!-- ─── SCREEN 2: MDL Detail / Drawings List ────────────────────────────────── -->
+        <!-- Shown after clicking an MDL row -->
+        <div id="mdlDetailView" style="display:none;">
+            <section>
+                <div style="margin-bottom: 1.5rem;">
+                    <button onclick="backToMdlList()">← Back to MDL List</button>
+                </div>
+                <div class="row">
+                    <h2 id="mdlHeader"></h2>
+                    <label>MDL Revision: </label>
+                    <select id="mdlRevSelector" onchange="changeMdlRevision(this.value)"></select>
+                    <button onclick="openMdlNewRevModal()">New MDL Revision</button>
+                </div>
+                <div class="search-bar">
+                    <input type="search" id="drawingSearch" placeholder="Search drawings by number or title..." aria-label="Search drawings">
+                    <button class="create-btn" onclick="openDrawingCreateModal()">+ Create New Drawing</button>
+                </div>
+                <p id="no-drawings" style="display:none;">No drawings yet.</p>
+                <table id="drawingsTable" style="display:none;">
+                    <thead><tr><th>Drawing Number</th><th>Title</th><th>Revision</th><th>Created</th><th>Last Updated</th></tr></thead>
+                    <tbody id="drawingsBody"></tbody>
+                </table>
+            </section>
+        </div>
+        <!-- ─── SCREEN 3: Drawing Editor ────────────────────────────────────────────── -->
+        <!-- Shown after clicking a drawing row -->
+        <div id="drawingEditorView" style="display:none;">
+            <section class="drawing-section">
+                <div style="margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+                    <button onclick="backToDrawingsList()">← Back to Drawings</button>
+                    <div class="row">
+                        <h2 id="drawingEditorTitle">Drawing Editor</h2>
+                        <label>Revision: </label>
+                        <select id="dwgRevSelector" onchange="changeDwgRevision(this.value)"></select>
+                    </div>
+                    <div>
+                        <button id="saveDrawingBtn">Save</button>
+                        <button id="saveExitDrawingBtn">Save & Back</button>
+                        <button onclick="backToDrawingsList()">Cancel</button>
+                    </div>
+                </div>
+                <!-- Drawing basic info -->
+                <div class="drawing-section">
+                    <h3>Drawing</h3>
+                    <div class="row">
+                        <label style="min-width:140px;">Drawing Number</label>
+                        <input type="text" id="dwg-number" style="flex:1;">
+                    </div>
+                    <div class="row">
+                        <label style="min-width:140px;">Revision</label>
+                        <input type="text" id="dwg-revision" style="width:120px;" placeholder="A">
+                        <small style="color:#666; margin-left:12px;">Change to create/edit different revision</small>
+                    </div>
+                </div>
+                <!-- Revision creation / switching controls -->
+                <div class="drawing-section hidden" id="revision-controls-area">
+                    <h3>Revision Controls</h3>
+                    <div id="new-revision-area" class="workspace">
+                        <div class="row">
+                            <label style="min-width:140px;">Target Revision</label>
+                            <input type="text" id="new-rev-label" style="width:120px;" readonly>
+                        </div>
+                        <div class="row">
+                            <label style="min-width:140px;">Current Revision</label>
+                            <input type="text" id="prev-rev" readonly>
+                        </div>
+                        <div style="margin:16px 0;">
+                            <label><input type="checkbox" id="carry-all-parts" checked> Carry ALL parts & sub-assemblies</label><br>
+                            <label><input type="checkbox" id="carry-notes" checked> Carry notes / status</label>
+                        </div>
+                        <div style="margin-top:1rem;">
+                            <strong>Or selectively carry specific parts from previous revisions:</strong>
+                            <div id="carry-parts-selector" class="carry-over-list" style="margin-top:8px;"></div>
+                        </div>
+                        <div style="margin-top:1.5rem;">
+                            <button id="apply-revision-btn" style="background:#28a745; padding:10px 20px;">Apply & Switch</button>
+                            <button onclick="hideRevisionControls()" style="margin-left:12px;">Cancel</button>
+                        </div>
+                    </div>
+                </div>
+                <!-- Parts builder -->
+                <div class="drawing-section">
+                    <h3>Parts</h3>
+                    <button id="add-part-btn">+ Add Part</button>
+                    <div id="parts-container" class="workspace"></div>
+                </div>
+                <!-- Notes -->
+                <div class="drawing-section">
+                    <h3>Notes / Status</h3>
+                    <textarea id="dwg-notes" rows="4" style="width:100%;"></textarea>
+                </div>
+                <!-- BOM preview table -->
+                <div class="drawing-section">
+                    <h3>Drawing BOM Preview</h3>
+                    <table class="bom-table">
+                        <thead>
+                            <tr><th>DWG</th><th>Rev</th><th>Assy</th><th>Part</th><th>Description</th><th>Material</th><th>Finish</th><th>Coupon</th></tr>
+                        </thead>
+                        <tbody id="bom-tbody"></tbody>
+                    </table>
+                </div>
+            </section>
+        </div>
+    </div>
+    <!-- ─── MODALS (popups) ──────────────────────────────────────────────────────────── -->
+    <!-- Appear on top of any screen when triggered -->
+    <div id="mdlModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeMdlModal()">×</span>
+            <h2>Create New MDL</h2>
+            <form id="mdlForm">
+                <label>MDL ID *</label><input type="text" id="mdl-id" required>
+                <label>Title *</label><input type="text" id="mdl-title" required>
+                <label>Company (optional)</label><input type="text" id="mdl-company">
+                <label>Initial Revision</label><input type="text" id="mdl-rev" value="A">
+                <button type="submit">Create MDL</button>
+            </form>
+        </div>
+    </div>
+    <div id="mdlNewRevModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeMdlNewRevModal()">×</span>
+            <h2>New MDL Revision</h2>
+            <form id="mdlNewRevForm">
+                <label>New Revision Label *</label><input type="text" id="new-mdl-rev" required>
+                <label>Carry over all drawings? <input type="checkbox" id="carry-all-drawings" checked></label>
+                <div id="prev-drawings-select" class="carry-over-list"></div>
+                <button type="submit">Create Revision</button>
+            </form>
+        </div>
+    </div>
+    <div id="drawingCreateModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeDrawingCreateModal()">×</span>
+            <h2>Create New Drawing</h2>
+            <form id="drawingCreateForm">
+                <label>Drawing Number *</label><input type="text" id="new-dwg-number" required>
+                <label>Title / Description *</label><input type="text" id="new-dwg-title" required>
+                <label>Initial Revision</label><input type="text" id="new-dwg-rev" value="A">
+                <button type="submit">Create Drawing</button>
+            </form>
+        </div>
+    </div>
+    <script>
+        // =============================================================================
+        // LINE-BY-LINE ANNOTATED JAVASCRIPT
+        // =============================================================================
+        // ─── 1. Global constants & variables ────────────────────────────────────────
+        // Line ~5–15
+        const STORAGE_KEY = 'engineering_mdl_drawings';
+        // Defines the name of the key used in localStorage to save all data
+        let mdls = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+        // Loads previously saved MDLs from browser storage, or starts with empty array
+        let currentMdlId = null; // Currently selected MDL's ID
+        let currentMdlRev = null; // Currently viewed MDL revision
+        let currentDrawingNumber = null; // Currently edited drawing's number
+        let drawingData = { // Temporary working copy of the current drawing
+            number: '', // drawing number
+            revision: 'A', // current revision being edited
+            parts: [], // array of part objects (nested for assemblies)
+            notes: '' // free-text notes
+        };
+        // ─── 2. Core helper functions ───────────────────────────────────────────────
+        // Lines ~17–22
+        function saveData() {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(mdls));
+        }
+        // Saves the entire mdls array back to browser storage whenever we make changes
+        function uuid() { return Math.random().toString(36).slice(2, 10); }
+        // Generates a short random ID for new parts (not cryptographically secure, but good enough for local use)
+        function findMdl() {
+            return mdls.find(m => m.id === currentMdlId);
+        }
+        // Returns the current MDL object we're working on
+        function findDrawing() {
+            const mdl = findMdl();
+            return mdl ? mdl.drawings.find(d => d.number === currentDrawingNumber) : null;
+        }
+        // Returns the current drawing object inside the current MDL
+        // ─── 3. Screen 1 – MDL List rendering & interaction ─────────────────────────
+        // Lines ~25–50
+        function renderMdlList(filtered = mdls) {
+            // Updates the table of all MDLs (Screen 1)
+            const tbody = document.getElementById('mdlBody');
+            const noMsg = document.getElementById('no-results');
+            const table = document.getElementById('mdlTable');
+            tbody.innerHTML = '';
+            if (filtered.length === 0) {
+                noMsg.textContent = mdls.length ? "No matches." : "No MDLs yet.";
+                table.style.display = 'none';
+                return;
+            }
+            noMsg.textContent = '';
+            table.style.display = 'table';
+            filtered.forEach(m => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td>${m.id}</td><td>${m.title}</td><td>${m.company || '—'}</td><td>${m.revision || '—'}</td><td>${m.created}</td>`;
+                tr.dataset.id = m.id; // Store ID so we know which row was clicked
+                tbody.appendChild(tr);
+            });
+        }
+        renderMdlList(); // Run once when page loads to show initial list
+        // Live search in MDL list
+        document.getElementById('searchInput').addEventListener('input', e => {
+            const term = e.target.value.trim().toLowerCase();
+            const filtered = term ? mdls.filter(m =>
+                m.id.toLowerCase().includes(term) ||
+                m.title.toLowerCase().includes(term) ||
+                (m.company && m.company.toLowerCase().includes(term))) : mdls;
+            renderMdlList(filtered);
+        });
+        // Clicking a row in MDL table → open that MDL's drawings list
+        document.getElementById('mdlBody').addEventListener('click', e => {
+            const tr = e.target.closest('tr');
+            if (!tr) return;
+            currentMdlId = tr.dataset.id;
+            currentMdlRev = findMdl().revision;
+            showMdlDetail(); // Switch to Screen 2
+        });
+        // ─── 4. Screen 2 – Drawings list inside selected MDL ────────────────────────
+        // Lines ~55–100 (approx)
+        function showMdlDetail() {
+            // Hide list, show drawings view (Screen 2)
+            document.getElementById('mdlListView').style.display = 'none';
+            document.getElementById('mdlDetailView').style.display = 'block';
+            document.getElementById('drawingEditorView').style.display = 'none';
+            const mdl = findMdl();
+            document.getElementById('mdlHeader').textContent = `MDL: ${mdl.title} (${mdl.id})${mdl.company ? ` – ${mdl.company}` : ''}`;
+            populateMdlRevSelector(mdl);
+            renderDrawingsList(mdl.drawings.filter(d => d.mdlRev === currentMdlRev || !d.mdlRev));
+        }
+        function populateMdlRevSelector(mdl) {
+            // Fill the revision dropdown for MDL level
+            const select = document.getElementById('mdlRevSelector');
+            select.innerHTML = '';
+            const revs = [mdl.revision, ...Object.keys(mdl.previousRevisions || {})].sort();
+            revs.forEach(r => {
+                const opt = document.createElement('option');
+                opt.value = r;
+                opt.text = r;
+                opt.selected = r === currentMdlRev;
+                select.appendChild(opt);
+            });
+        }
+        function changeMdlRevision(rev) {
+            // Called when user changes MDL revision dropdown
+            currentMdlRev = rev;
+            const mdl = findMdl();
+            const drawings = (rev === mdl.revision ? mdl.drawings : (mdl.previousRevisions[rev]?.drawings || []));
+            renderDrawingsList(drawings);
+        }
+        function renderDrawingsList(drawings) {
+            // Update the table of drawings inside current MDL + revision
+            const tbody = document.getElementById('drawingsBody');
+            const noMsg = document.getElementById('no-drawings');
+            const table = document.getElementById('drawingsTable');
+            tbody.innerHTML = '';
+            if (drawings.length === 0) {
+                noMsg.style.display = 'block';
+                table.style.display = 'none';
+                return;
+            }
+            noMsg.style.display = 'none';
+            table.style.display = 'table';
+            drawings.forEach(d => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td>${d.number}</td><td>${d.title}</td><td>${d.revision || '—'}</td><td>${d.created}</td><td>${d.lastUpdated || d.created}</td>`;
+                tr.dataset.number = d.number;
+                tbody.appendChild(tr);
+            });
+        }
+        // Drawings live search
+        document.getElementById('drawingSearch').addEventListener('input', e => {
+            const term = e.target.value.trim().toLowerCase();
+            const mdl = findMdl();
+            const drawings = mdl.drawings.filter(d =>
+                d.number.toLowerCase().includes(term) || d.title.toLowerCase().includes(term));
+            renderDrawingsList(drawings);
+        });
+        // Click drawing row → open editor (Screen 3)
+        document.getElementById('drawingsBody').addEventListener('click', e => {
+            const tr = e.target.closest('tr');
+            if (!tr) return;
+            currentDrawingNumber = tr.dataset.number;
+            loadDrawingIntoEditor();
+            document.getElementById('mdlDetailView').style.display = 'none';
+            document.getElementById('drawingEditorView').style.display = 'block';
+        });
+        // ─── 5. Screen 3 – Drawing Editor logic ─────────────────────────────────────
+        // Lines ~105–200 (approx)
+        function loadDrawingIntoEditor() {
+            const dwg = findDrawing();
+            if (!dwg) return backToDrawingsList();
+            // Load selected drawing into working object
+            drawingData = {
+                number: dwg.number,
+                revision: dwg.revision || 'A',
+                parts: JSON.parse(JSON.stringify(dwg.parts || [])), // deep copy so we don't modify original yet
+                notes: dwg.notes || ''
+            };
+            // Fill form fields
+            document.getElementById('dwg-number').value = drawingData.number;
+            document.getElementById('dwg-revision').value = drawingData.revision;
+            document.getElementById('dwg-notes').value = drawingData.notes;
+            document.getElementById('drawingEditorTitle').textContent = `Drawing: ${drawingData.number}`;
+            populateDwgRevSelector(dwg);
+            const partsWs = document.getElementById('parts-container');
+            partsWs.innerHTML = '';
+            drawingData.parts.forEach(p => createPartCard(partsWs, false, null, p));
+            document.getElementById('revision-controls-area').classList.add('hidden');
+            updateBOM();
+        }
+        function populateDwgRevSelector(dwg) {
+            // Fill revision dropdown in drawing editor
+            const select = document.getElementById('dwgRevSelector');
+            select.innerHTML = '';
+            const revs = [dwg.revision, ...Object.keys(dwg.previousRevisions || {})].sort();
+            revs.forEach(r => {
+                const opt = document.createElement('option');
+                opt.value = r;
+                opt.text = r;
+                opt.selected = r === drawingData.revision;
+                select.appendChild(opt);
+            });
+        }
+        function changeDwgRevision(rev) {
+            // Load a previous revision into editor when selected from dropdown
+            const dwg = findDrawing();
+            const revData = rev === dwg.revision ? dwg : (dwg.previousRevisions?.[rev] || {});
+            drawingData.revision = rev;
+            drawingData.parts = JSON.parse(JSON.stringify(revData.parts || []));
+            drawingData.notes = revData.notes || '';
+            document.getElementById('dwg-revision').value = rev;
+            const partsWs = document.getElementById('parts-container');
+            partsWs.innerHTML = '';
+            drawingData.parts.forEach(p => createPartCard(partsWs, false, null, p));
+            updateBOM();
+        }
+        // ─── 6. Revision creation / switching – the new feature you wanted ──────────
+        // When user changes the revision input field
+        document.getElementById('dwg-revision').addEventListener('input', function () {
+            const newRevValue = this.value.trim();
+            if (newRevValue && newRevValue !== drawingData.revision) {
+                showRevisionControls(newRevValue); // Show the carry-over panel
+            } else {
+                hideRevisionControls(); // Hide it if back to original
+            }
+        });
+        // Show the carry-over UI when new revision is entered
+        function showRevisionControls(targetRev) {
+            document.getElementById('revision-controls-area').classList.remove('hidden');
+            document.getElementById('new-rev-label').value = targetRev;
+            document.getElementById('prev-rev').value = drawingData.revision;
+            const container = document.getElementById('carry-parts-selector');
+            container.innerHTML = '';
+            const dwg = findDrawing();
+            const allPrevParts = [];
+            // Include current revision parts (as reference)
+            drawingData.parts.forEach(p => allPrevParts.push({ ...p, sourceRev: drawingData.revision }));
+            // Include all previous revisions' parts
+            Object.entries(dwg.previousRevisions || {}).forEach(([rev, data]) => {
+                (data.parts || []).forEach(p => allPrevParts.push({ ...p, sourceRev: rev }));
+            });
+            if (allPrevParts.length === 0) {
+                container.innerHTML = '<p style="color:#777;">No previous parts available.</p>';
+                return;
+            }
+            allPrevParts.forEach((part, index) => {
+                const label = document.createElement('label');
+                label.style.display = 'block';
+                label.style.marginBottom = '6px';
+                label.innerHTML = `
+                <input type="checkbox" class="carry-part-cb" data-index="${index}" checked>
+                ${part.number || '?'} – ${part.desc || '(no description)'}
+                <small style="color:#666;">(rev ${part.sourceRev})</small>
+            `;
+                container.appendChild(label);
+            });
+        }
+        function hideRevisionControls() {
+            document.getElementById('revision-controls-area').classList.add('hidden');
+        }
+        // FIX: Expanded collapseAll to also collapse individual part details (not just assemblies)
+        function collapseAllPartCards() {
+            document.querySelectorAll('.part-card .p-asm:checked').forEach(asmCheckbox => {
+                asmCheckbox.checked = false;
+            });
+            document.querySelectorAll('.part-details').forEach(details => {
+                details.classList.add('hidden');
+            });
+        }
+        // When user clicks "Apply & Switch"
+        document.getElementById('apply-revision-btn').addEventListener('click', function () {
+            const targetRev = document.getElementById('new-rev-label').value.trim();
+            if (!targetRev) return alert("Enter a revision label");
+            const dwg = findDrawing();
+            if (!dwg) return;
+            // Step 1: Save current state as previous revision
+            if (!dwg.previousRevisions) dwg.previousRevisions = {};
+            dwg.previousRevisions[drawingData.revision] = {
+                parts: JSON.parse(JSON.stringify(drawingData.parts)),
+                notes: drawingData.notes
+            };
+            // Step 2: Switch to the new revision label
+            drawingData.revision = targetRev;
+            dwg.revision = targetRev;
+            document.getElementById('dwg-revision').value = targetRev;
+            // Step 3: Decide base content for new revision
+            const keepAll = document.getElementById('carry-all-parts').checked;
+            const keepNotes = document.getElementById('carry-notes').checked;
+            if (!keepNotes) {
+                drawingData.notes = '';
+                document.getElementById('dwg-notes').value = '';
+            }
+            let newParts = keepAll ? JSON.parse(JSON.stringify(drawingData.parts)) : [];
+            // Step 4: Add any selectively chosen parts
+            const selected = Array.from(document.querySelectorAll('.carry-part-cb:checked'))
+                .map(cb => parseInt(cb.dataset.index));
+            const allPrev = [];
+            drawingData.parts.forEach(p => allPrev.push({ ...p }));
+            Object.values(dwg.previousRevisions).forEach(rev => {
+                rev.parts?.forEach(p => allPrev.push({ ...p }));
+            });
+            selected.forEach(i => {
+                if (allPrev[i]) newParts.push(allPrev[i]);
+            });
+            drawingData.parts = newParts;
+            // Step 5: Refresh the screen
+            const partsWs = document.getElementById('parts-container');
+            partsWs.innerHTML = '';
+            drawingData.parts.forEach(p => createPartCard(partsWs, false, null, p));
+            collapseAllPartCards();
+            updateBOM();
+            hideRevisionControls();
+            populateDwgRevSelector(dwg);
+            saveData();
+            alert(`Now editing revision ${targetRev}`);
+        });
+        // ─── 7. Save buttons ──────────────────────────────────────────────────────────
+        document.getElementById('saveDrawingBtn').addEventListener('click', () => {
+            const dwg = findDrawing();
+            if (!dwg) return;
+            dwg.number = document.getElementById('dwg-number').value.trim();
+            dwg.revision = drawingData.revision;
+            dwg.notes = document.getElementById('dwg-notes').value;
+            dwg.parts = JSON.parse(JSON.stringify(drawingData.parts));
+            dwg.lastUpdated = new Date().toLocaleString();
+            saveData();
+            alert("Drawing saved.");
+        });
+        document.getElementById('saveExitDrawingBtn').addEventListener('click', () => {
+            document.getElementById('saveDrawingBtn').click();
+            backToDrawingsList();
+        });
+        // ─── PART CARD CREATION ────────────────────────────────────────────────────────
+        // This function creates one visual "card" (a block of UI) for a part or sub-part.
+        // It is called once per part when loading a drawing, and again every time you click "+ Add Part" or "+ Add Child".
+        function createPartCard(
+            parentWs, // The DOM element (workspace) where this card should be added
+            isChild = false, // true if this is a child part inside an assembly
+            parentId = null, // ID of the parent part (only used for children)
+            existing = null // Optional: existing part data to load (when editing saved drawing)
+        ) {
+            // Generate a unique ID for this part (used to track it in data model)
+            const partId = existing?.id || uuid(); // If loading existing, reuse its ID; else make new one
+            // Create the actual HTML element (a <div>) that will be the card
+            const card = document.createElement('div');
+            card.className = 'part-card'; // CSS class for styling
+            card.dataset.id = partId; // Store ID in data attribute (useful for future features)
+            // Build the entire HTML content of the card using template literal
+            // This is what the user actually sees and interacts with
+            card.innerHTML = `
+            <h4>${isChild ? 'Child Part' : 'Part'}</h4> <!-- FIX: Header now clickable for toggle -->
+            <div class="part-details"> <!-- FIX: New wrapper for collapsible content -->
+                <!-- Part Number field -->
+                <div class="row">
+                    <label>Part Number</label>
+                    <input type="text" class="p-num" value="${existing?.number || ''}">
+                </div>
+                <!-- Description field -->
+                <div class="row">
+                    <label>Description</label>
+                    <input type="text" class="p-desc" value="${existing?.desc || ''}">
+                </div>
+                <!-- Material field (optional) -->
+                <div class="row">
+                    <label>Material</label>
+                    <input type="text" class="p-mat" value="${existing?.material || ''}">
+                </div>
+                <!-- Assembly checkbox – controls whether child workspace appears -->
+                <div class="row">
+                    <label>
+                        <input type="checkbox" class="p-asm" ${existing?.isAssembly ? 'checked' : ''}>
+                        Assembly
+                    </label>
+                </div>
+                <!-- Hidden area where child parts go (only shown if assembly checked) -->
+                <div class="child-workspace ${existing?.isAssembly ? '' : 'hidden'}"></div>
+                <!-- Coupon / Classification section -->
+                <div>
+                    <strong>Coupon</strong><br>
+                    <label>
+                        <input type="checkbox" class="p-coup-chk" ${existing?.hasCoupon ? 'checked' : ''}>
+                        Has coupon
+                    </label>
+                    <div id="coupon-div-${partId}" class="row ${existing?.hasCoupon ? '' : 'hidden'}"> <!-- FIX: Unique ID for more specific selector -->
+                        <input type="text" class="p-coup-val" value="${existing?.coupon || ''}" placeholder="e.g. Hardware">
+                    </div>
+                </div>
+                <!-- Finish section -->
+                <div>
+                    <strong>Finish</strong><br>
+                    <label>
+                        <input type="checkbox" class="p-finish-chk" ${existing?.hasFinish ? 'checked' : ''}>
+                        Requires finish
+                    </label>
+                    <div id="finish-div-${partId}" class="${existing?.hasFinish ? '' : 'hidden'}"> <!-- FIX: Unique ID for more specific selector -->
+                        <input type="text" class="p-finish-val" value="${existing?.finish || ''}" placeholder="e.g. Anodize Type II">
+                    </div>
+                </div>
+                <!-- Remove button – deletes this part card -->
+                <button class="remove-part" style="margin-top:8px; background:#dc3545;">Remove</button>
+            </div>
+        `;
+            // Add the newly created card to its parent workspace (either main parts area or child workspace)
+            parentWs.appendChild(card);
+            // ─── Data model connection ───────────────────────────────────────────────
+            // Decide where in the data tree this part belongs
+            let targetArray = drawingData.parts; // Default: top-level parts
+            if (parentId) { // If this is a child...
+                const parent = findPartById(drawingData.parts, parentId);
+                if (parent) {
+                    // Make sure parent has a children array
+                    targetArray = parent.children = parent.children || [];
+                }
+            }
+            // Create or use the data object for this part
+            const partObj = existing || {
+                id: partId,
+                number: '',
+                desc: '',
+                material: '',
+                isAssembly: false,
+                children: [],
+                hasCoupon: false,
+                coupon: '',
+                hasFinish: false,
+                finish: ''
+            };
+            // If this is a brand-new part (not loading existing), add it to the array
+            if (!existing) targetArray.push(partObj);
+            // FIX: Make header clickable to toggle details (accordion style)
+            const header = card.querySelector('h4');
+            const details = card.querySelector('.part-details');
+            header.onclick = () => {
+                details.classList.toggle('hidden');
+            };
+            // ─── Event listeners – connect inputs to data model ──────────────────────
+            // Every time user types, update the data object and refresh BOM preview
+            card.querySelector('.p-num').oninput = e => {
+                partObj.number = e.target.value;
+                updateBOM();
+            };
+            card.querySelector('.p-desc').oninput = e => {
+                partObj.desc = e.target.value;
+                updateBOM();
+            };
+            card.querySelector('.p-mat').oninput = e => {
+                partObj.material = e.target.value;
+                updateBOM();
+            };
+            // Assembly checkbox → show/hide child workspace
+            card.querySelector('.p-asm').onchange = e => {
+                partObj.isAssembly = e.target.checked;
+                const cw = card.querySelector('.child-workspace');
+                cw.classList.toggle('hidden', !e.target.checked);
+                // Make sure there's always an "Add Child" button
+                if (e.target.checked && !cw.querySelector('.add-child-btn')) {
+                    const btn = document.createElement('button');
+                    btn.textContent = '+ Add Child Part';
+                    btn.className = 'add-child-btn';
+                    btn.onclick = () => createPartCard(cw, true, partId);
+                    cw.insertBefore(btn, cw.firstChild); // put at top
+                }
+                // Optional: auto-expand when checking the box
+                cw.classList.remove('hidden');
+                updateBOM();
+            };
+            // Coupon checkbox → show/hide input field
+            card.querySelector('.p-coup-chk').onchange = e => {
+                partObj.hasCoupon = e.target.checked;
+                // FIX: Use unique ID for selector to prevent any possible overlap
+                card.querySelector(`#coupon-div-${partId}`).classList.toggle('hidden', !e.target.checked);
+                updateBOM();
+            };
+            card.querySelector('.p-coup-val').oninput = e => {
+                partObj.coupon = e.target.value;
+                updateBOM();
+            };
+            // Finish checkbox → show/hide input field
+            card.querySelector('.p-finish-chk').onchange = e => {
+                partObj.hasFinish = e.target.checked;
+                // FIX: Use unique ID for selector to prevent any possible overlap
+                card.querySelector(`#finish-div-${partId}`).classList.toggle('hidden', !e.target.checked);
+                updateBOM();
+            };
+            const finishInput = card.querySelector('.p-finish-val');
+            finishInput.oninput = e => {
+                partObj.finish = e.target.value;
+                updateBOM();
+            };
+            // FIX: Auto-collapse when "done" (blur last input + check if required fields filled)
+            finishInput.onblur = () => {
+                if (partObj.number && partObj.desc) { // Heuristic: number + desc = "filled"
+                    details.classList.add('hidden');
+                }
+            };
+            // Remove button → delete this card and its data
+            card.querySelector('.remove-part').onclick = () => {
+                card.remove(); // Remove from screen
+                const idx = targetArray.findIndex(p => p.id === partId);
+                if (idx > -1) targetArray.splice(idx, 1); // Remove from data model
+                updateBOM(); // Refresh preview
+            };
+            // ─── Handle existing children (when loading saved data) ───────────────────
+            if (partObj.isAssembly && partObj.children?.length) {
+                const cw = card.querySelector('.child-workspace');
+                cw.classList.remove('hidden');
+                // Add "Add Child" button if not already present
+                if (!cw.querySelector('button')) {
+                    const btn = document.createElement('button');
+                    btn.textContent = '+ Add Child';
+                    btn.onclick = () => createPartCard(cw, true, partId);
+                    cw.appendChild(btn);
+                }
+                // Recursively create cards for all saved child parts
+                partObj.children.forEach(child => {
+                    createPartCard(cw, true, partId, child);
+                });
+            }
+            return card; // Return the card element so caller can do something with it if needed
+        }
+        // ─── Helper: find a part by ID anywhere in the nested structure ─────────────
+        function findPartById(parts, id) {
+            for (let p of parts) {
+                if (p.id === id) return p; // Found it!
+                if (p.children) { // Check children recursively
+                    const found = findPartById(p.children, id);
+                    if (found) return found;
+                }
+            }
+            return null; // Not found
+        }
+        // ─── BOM PREVIEW ───────────────────────────────────────────────────────────────
+        function updateBOM() {
+            const tbody = document.getElementById('bom-tbody');
+            tbody.innerHTML = '';
+            const dwg = drawingData.number || 'NEW';
+            const rev = drawingData.revision || '—';
+            // Only show top row if there is at least one assembly in the top level
+            const hasTopLevelAssembly = drawingData.parts.some(p => p.isAssembly);
+            if (hasTopLevelAssembly) {
+                tbody.innerHTML += `<tr style="font-weight:bold;">
+                <td>${dwg}</td><td>${rev}</td><td>TOP</td><td></td><td></td><td></td><td></td><td></td>
+            </tr>`;
+            }
+            function renderPart(p, lvl = 1, prefix = hasTopLevelAssembly ? '-' : '') {
+                const assy = prefix + (lvl > 1 || hasTopLevelAssembly ? lvl : '');
+                // FIX: Define the missing variables for finish/coupon (was causing error)
+                const fCls = p.hasFinish && !p.finish ? 'incomplete' : '';
+                const cCls = p.hasCoupon && !p.coupon ? 'incomplete' : '';
+                const fVal = p.hasFinish ? (p.finish || '') : '—';
+                const cVal = p.hasCoupon ? (p.coupon || '') : '—';
+                tbody.innerHTML += `<tr class="level-${lvl}">
+                <td></td><td></td><td>${assy}</td><td>${p.number || ''}</td><td>${p.desc || ''}</td>
+                <td>${p.material || ''}</td><td class="${fCls}">${fVal}</td><td class="${cCls}">${cVal}</td></tr>`;
+                if (p.isAssembly && p.children) {
+                    p.children.forEach(c => renderPart(c, lvl + 1, prefix + (hasTopLevelAssembly ? '-' : '')));
+                }
+            }
+            drawingData.parts.forEach(p => renderPart(p, hasTopLevelAssembly ? 1 : 0));
+        }
+        // ─── ADD PART BUTTON ───────────────────────────────────────────────────────────
+        document.getElementById('add-part-btn').addEventListener('click', () => createPartCard(document.getElementById('parts-container')));
+        // ─── NAVIGATION ────────────────────────────────────────────────────────────────
+        function backToMdlList() {
+            currentMdlId = null;
+            currentMdlRev = null;
+            document.getElementById('mdlDetailView').style.display = 'none';
+            document.getElementById('drawingEditorView').style.display = 'none';
+            document.getElementById('mdlListView').style.display = 'block';
+            renderMdlList(mdls);
+        }
+        function backToDrawingsList() {
+            document.getElementById('drawingEditorView').style.display = 'none';
+            document.getElementById('mdlDetailView').style.display = 'block';
+            const mdl = findMdl();
+            if (mdl) renderDrawingsList(mdl.drawings.filter(d => d.mdlRev === currentMdlRev));
+        }
+        // ─── MDL CREATE MODAL ──────────────────────────────────────────────────────────
+        function openMdlModal() { document.getElementById('mdlModal').style.display = 'flex'; }
+        function closeMdlModal() { document.getElementById('mdlModal').style.display = 'none'; }
+        document.getElementById('mdlForm').addEventListener('submit', e => {
+            e.preventDefault();
+            const id = document.getElementById('mdl-id').value.trim();
+            if (mdls.some(m => m.id === id)) return alert("ID already exists");
+            const now = new Date().toLocaleString();
+            mdls.push({
+                id,
+                title: document.getElementById('mdl-title').value.trim(),
+                company: document.getElementById('mdl-company').value.trim() || null,
+                revision: document.getElementById('mdl-rev').value.trim() || 'A',
+                created: now,
+                lastUpdated: now,
+                drawings: [],
+                previousRevisions: {}
+            });
+            saveData();
+            renderMdlList(mdls);
+            closeMdlModal();
+        });
+        // ─── MDL NEW REVISION MODAL ────────────────────────────────────────────────────
+        function openMdlNewRevModal() {
+            const mdl = findMdl();
+            if (!mdl) return;
+            document.getElementById('mdlNewRevModal').style.display = 'flex';
+            document.getElementById('new-mdl-rev').value = '';
+            const list = document.getElementById('prev-drawings-select');
+            list.innerHTML = '';
+            mdl.drawings.forEach(d => {
+                const lbl = document.createElement('label');
+                lbl.innerHTML = `<input type="checkbox" checked data-number="${d.number}"> ${d.number} - ${d.title}`;
+                list.appendChild(lbl);
+            });
+        }
+        function closeMdlNewRevModal() { document.getElementById('mdlNewRevModal').style.display = 'none'; }
+        document.getElementById('mdlNewRevForm').addEventListener('submit', e => {
+            e.preventDefault();
+            const newRev = document.getElementById('new-mdl-rev').value.trim();
+            if (!newRev) return alert("Enter new revision label");
+            const mdl = findMdl();
+            mdl.previousRevisions = mdl.previousRevisions || {};
+            mdl.previousRevisions[mdl.revision] = { drawings: JSON.parse(JSON.stringify(mdl.drawings)) };
+            mdl.revision = newRev;
+            mdl.lastUpdated = new Date().toLocaleString();
+            const selected = Array.from(document.querySelectorAll('#prev-drawings-select input:checked'))
+                .map(cb => cb.dataset.number);
+            mdl.drawings = mdl.drawings.filter(d => selected.includes(d.number));
+            saveData();
+            currentMdlRev = newRev;
+            populateMdlRevSelector(mdl);
+            renderDrawingsList(mdl.drawings);
+            closeMdlNewRevModal();
+        });
+        // ─── DRAWING CREATE MODAL ──────────────────────────────────────────────────────
+        function openDrawingCreateModal() {
+            document.getElementById('drawingCreateModal').style.display = 'flex';
+            document.getElementById('drawingCreateForm').reset();
+            document.getElementById('new-dwg-rev').value = 'A';
+        }
+        function closeDrawingCreateModal() { document.getElementById('drawingCreateModal').style.display = 'none'; }
+        document.getElementById('drawingCreateForm').addEventListener('submit', e => {
+            e.preventDefault();
+            const number = document.getElementById('new-dwg-number').value.trim();
+            const title = document.getElementById('new-dwg-title').value.trim();
+            const rev = document.getElementById('new-dwg-rev').value.trim() || 'A';
+            if (!number || !title) return;
+            const mdl = findMdl();
+            if (mdl.drawings.some(d => d.number === number)) {
+                alert("Drawing number already exists.");
+                return;
+            }
+            const now = new Date().toLocaleString();
+            const newDwg = {
+                number, title, revision: rev, created: now, lastUpdated: now, mdlRev: currentMdlRev,
+                parts: [], notes: '', previousRevisions: {}
+            };
+            mdl.drawings.push(newDwg);
+            saveData();
+            renderDrawingsList(mdl.drawings.filter(d => d.mdlRev === currentMdlRev));
+            closeDrawingCreateModal();
+            currentDrawingNumber = number;
+            loadDrawingIntoEditor();
+            document.getElementById('mdlDetailView').style.display = 'none';
+            document.getElementById('drawingEditorView').style.display = 'block';
+        });
+        // ─── CLOSE MODALS WHEN CLICKING OUTSIDE ────────────────────────────────────────
+        window.addEventListener('click', e => {
+            if (e.target.classList.contains('modal')) e.target.style.display = 'none';
+        });
+    </script>
+</body>
+</html>

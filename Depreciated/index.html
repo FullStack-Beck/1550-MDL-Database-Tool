@@ -1,0 +1,256 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MDL Manager – List</title>
+
+    <style>
+        body {
+            font-family: system-ui, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f5f5f5;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .search-bar {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+        }
+
+        input[type="search"], input[type="text"], button, textarea, select {
+            padding: 10px 14px;
+            font-size: 1rem;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+        }
+
+        input[type="search"] {
+            flex: 1;
+            min-width: 250px;
+        }
+
+        button {
+            background: #0066cc;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+
+            button:hover {
+                background: #0055aa;
+            }
+
+        .create-btn {
+            background: #28a745;
+            padding: 10px 20px;
+        }
+
+            .create-btn:hover {
+                background: #218838;
+            }
+
+        section {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+
+        th {
+            background: #f0f0f0;
+        }
+
+        tr {
+            cursor: pointer;
+        }
+
+            tr:hover {
+                background: #f8f9fa;
+            }
+
+        .modal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.5);
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 600px;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .close {
+            float: right;
+            font-size: 2rem;
+            cursor: pointer;
+            color: #aaa;
+        }
+
+            .close:hover {
+                color: #333;
+            }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+
+        <header>
+            <h1>MDL & Drawing Manager</h1>
+            <p>Local Storage – data saved in your browser</p>
+        </header>
+
+        <div id="mdlListView">
+            <div class="search-bar">
+                <input type="search" id="searchInput" placeholder="Search MDLs by ID, title, company..." aria-label="Search MDLs">
+                <button class="create-btn" onclick="openMdlModal()">+ Create New MDL</button>
+            </div>
+
+            <section id="mdlResults">
+                <h2>Master Data Lists</h2>
+                <p id="no-results">No MDLs yet. Create one to get started!</p>
+                <table id="mdlTable" style="display:none;">
+                    <thead><tr><th>MDL ID</th><th>Title</th><th>Company</th><th>Revision</th><th>Created</th></tr></thead>
+                    <tbody id="mdlBody"></tbody>
+                </table>
+            </section>
+        </div>
+
+    </div>
+
+    <!-- ─── CREATE MDL MODAL ─────────────────────────────────────── -->
+    <div id="mdlModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeMdlModal()">×</span>
+            <h2>Create New MDL</h2>
+            <form id="mdlForm">
+                <label>MDL ID *</label><input type="text" id="mdl-id" required>
+                <label>Title *</label><input type="text" id="mdl-title" required>
+                <label>Company (optional)</label><input type="text" id="mdl-company">
+                <label>Initial Revision</label><input type="text" id="mdl-rev" value="A">
+                <button type="submit">Create MDL</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // ─── SHARED STORAGE LOGIC ───────────────────────────────────
+        const STORAGE_KEY = 'engineering_mdl_drawings';
+        let mdls = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+
+        function saveData() {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(mdls));
+        }
+
+        function uuid() { return Math.random().toString(36).slice(2, 10); }
+
+        // ─── RENDER MDL LIST ────────────────────────────────────────
+        function renderMdlList(filtered = mdls) {
+            const tbody = document.getElementById('mdlBody');
+            const noMsg = document.getElementById('no-results');
+            const table = document.getElementById('mdlTable');
+            tbody.innerHTML = '';
+
+            if (filtered.length === 0) {
+                noMsg.textContent = mdls.length ? "No matches." : "No MDLs yet.";
+                table.style.display = 'none';
+                return;
+            }
+
+            noMsg.textContent = '';
+            table.style.display = 'table';
+
+            filtered.forEach(m => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td>${m.id}</td><td>${m.title}</td><td>${m.company || '—'}</td><td>${m.revision || '—'}</td><td>${m.created}</td>`;
+                tr.dataset.id = m.id;
+                tbody.appendChild(tr);
+            });
+        }
+
+        renderMdlList();  // initial load
+
+        // Live search
+        document.getElementById('searchInput').addEventListener('input', e => {
+            const term = e.target.value.trim().toLowerCase();
+            const filtered = term ? mdls.filter(m =>
+                m.id.toLowerCase().includes(term) ||
+                m.title.toLowerCase().includes(term) ||
+                (m.company && m.company.toLowerCase().includes(term))) : mdls;
+            renderMdlList(filtered);
+        });
+
+        // Click row → go to detail
+        document.getElementById('mdlBody').addEventListener('click', e => {
+            const tr = e.target.closest('tr');
+            if (!tr) return;
+            const id = tr.dataset.id;
+            window.location.href = `mdl-detail.html?id=${encodeURIComponent(id)}`;
+        });
+
+        // ─── MODAL ──────────────────────────────────────────────────
+        function openMdlModal() { document.getElementById('mdlModal').style.display = 'flex'; }
+        function closeMdlModal() { document.getElementById('mdlModal').style.display = 'none'; }
+
+        document.getElementById('mdlForm').addEventListener('submit', e => {
+            e.preventDefault();
+            const id = document.getElementById('mdl-id').value.trim();
+            if (mdls.some(m => m.id === id)) return alert("ID already exists");
+
+            const now = new Date().toLocaleString();
+            mdls.push({
+                id,
+                title: document.getElementById('mdl-title').value.trim(),
+                company: document.getElementById('mdl-company').value.trim() || null,
+                revision: document.getElementById('mdl-rev').value.trim() || 'A',
+                created: now,
+                lastUpdated: now,
+                drawings: [],
+                previousRevisions: {}
+            });
+            saveData();
+            renderMdlList(mdls);
+            closeMdlModal();
+        });
+
+        // close modal on outside click
+        window.addEventListener('click', e => {
+            if (e.target.classList.contains('modal')) e.target.style.display = 'none';
+        });
+    </script>
+</body>
+</html>

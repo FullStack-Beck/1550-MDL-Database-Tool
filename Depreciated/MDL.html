@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+ <!-- This line tells the browser: "Hey, this is a modern HTML5 document" -->
+<html lang="en">
+ <!-- The whole page lives inside <html>. lang="en" means English -->
+<head>
+    <!-- The <head> contains information ABOUT the page (not visible content) -->
+    <meta charset="UTF-8" /> <!-- Tells browser to use modern character set (supports emojis, accents, etc.) -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- ↑ Very important for phones/tablets: makes the page fit the screen properly -->
+    <title>MDL Manager - Local Storage Skeleton</title>
+    <!-- This is what appears in the browser tab -->
+    <style>
+        /* Everything inside <style> is CSS → controls how things LOOK */
+        body {
+            font-family: system-ui, -apple-system, sans-serif; /* nice modern font stack */
+            margin: 0; /* remove default spacing around page */
+            padding: 20px; /* add breathing room inside */
+            background: #f5f5f5; /* light gray background */
+            color: #333; /* dark text */
+        }
+
+        .container { /* . means class selector — we use this to style a group */
+            max-width: 900px; /* never wider than 900px */
+            margin: 0 auto; /* center it horizontally */
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .search-bar {
+            display: flex; /* makes children line up horizontally */
+            gap: 10px; /* space between items */
+            margin-bottom: 2rem;
+            flex-wrap: wrap; /* on small screens → items wrap to new line */
+        }
+
+        input[type="search"],
+        input[type="text"],
+        button {
+            padding: 12px 16px; /* inner space */
+            font-size: 1rem;
+            border: 1px solid #ccc;
+            border-radius: 6px; /* rounded corners */
+        }
+
+        input[type="search"] {
+            flex: 1;
+            min-width: 250px;
+        }
+        /* search box grows to fill space */
+        button {
+            background: #0066cc; /* blue */
+            color: white;
+            border: none;
+            cursor: pointer; /* hand icon when hovering */
+        }
+
+            button:hover {
+                background: #0055aa;
+            }
+        /* darker when mouse over */
+        .create-btn {
+            background: #28a745; /* green */
+            padding: 12px 24px;
+        }
+
+            .create-btn:hover {
+                background: #218838;
+            }
+
+        #results { /* # means ID selector — unique element */
+            background: white;
+            padding: 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1); /* soft shadow */
+            min-height: 200px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+
+        th {
+            background: #f0f0f0;
+        }
+        /* light gray header row */
+        tr {
+            cursor: pointer;
+        }
+            /* Make rows look clickable */
+            tr:hover {
+                background: #f8f9fa;
+            }
+        /* Highlight on hover */
+        /* ────── Modal (popup) styles ────── */
+        .modal {
+            display: none; /* hidden by default */
+            position: fixed; /* stays in place even when scrolling */
+            inset: 0; /* top,right,bottom,left = 0 → full screen */
+            background: rgba(0,0,0,0.5); /* semi-transparent black overlay */
+            align-items: center;
+            justify-content: center;
+            z-index: 1000; /* appears on top of everything */
+        }
+
+        .modal-content {
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 500px;
+        }
+
+        .close {
+            float: right;
+            font-size: 1.8rem;
+            cursor: pointer;
+            color: #aaa;
+        }
+
+            .close:hover {
+                color: #333;
+            }
+
+        form label {
+            display: block;
+            margin: 1rem 0 0.4rem;
+            font-weight: 500;
+        }
+
+        form input {
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        #no-results {
+            color: #777;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <!-- Everything the user actually sees goes inside <body> -->
+    <div class="container">
+        <!-- wrapper that keeps content centered and not too wide -->
+        <header>
+            <h1>MDL Manager (Local Storage Mode)</h1>
+            <p>data saved in your browser (refresh-safe)</p>
+        </header>
+
+        <!-- MDL List View -->
+        <div id="mdlListView">
+            <div class="search-bar">
+                <!-- Search input + create button live side-by-side -->
+                <input type="search" id="searchInput" placeholder="Search by ID, title..." aria-label="Search MDLs">
+                <button class="create-btn" onclick="openModal()">+ Create New MDL</button>
+            </div>
+            <section id="results">
+                <h2>Master Data Lists</h2>
+                <p id="no-results">No MDLs yet. Create one to get started!</p>
+                <!-- This table is hidden until we have data -->
+                <table id="resultsTable" style="display:none;">
+                    <thead>
+                        <tr>
+                            <th>MDL ID</th>
+                            <th>Title</th>
+                            <th>Company</th>
+                            <th>Revision</th>
+                            <th>Created</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody"></tbody> <!-- ← JavaScript will put rows here -->
+                </table>
+            </section>
+        </div>
+
+        <!-- MDL Detail View -->
+        <section id="mdlDetail" style="display:none;">
+            <div style="margin-bottom: 1.5rem;">
+                <button onclick="showListView()">← Back to MDL List</button>
+            </div>
+            <h2 id="mdlHeader"></h2>
+            <div class="search-bar">
+                <input type="search" id="drawingSearch" placeholder="Search drawings by number, title..." aria-label="Search drawings">
+                <button class="create-btn" onclick="openDrawingModal()">+ Create New Drawing</button>
+            </div>
+            <div id="drawingsResults">
+                <p id="no-drawings">No drawings yet in this MDL. Create one to get started!</p>
+                <table id="drawingsTable" style="display:none;">
+                    <thead>
+                        <tr>
+                            <th>Drawing Number</th>
+                            <th>Title / Description</th>
+                            <th>Revision</th>
+                            <th>Created</th>
+                            <th>Last Updated</th>
+                        </tr>
+                    </thead>
+                    <tbody id="drawingsBody"></tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+
+    <!-- ────── The popup (modal) for creating new MDL ────── -->
+    <div id="createModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal()">×</span>
+            <h2>Create New MDL</h2>
+            <form id="createForm">
+                <!-- required = browser shows error if empty -->
+                <label for="mdlId">MDL ID <span style="color:red;">*</span></label>
+                <input type="text" id="mdlId" name="mdlId" required placeholder="e.g. MDL-2026-045" />
+                <label for="title">Title <span style="color:red;">*</span></label>
+                <input type="text" id="title" name="title" required placeholder="e.g. Hydraulic System Drawings" />
+                <label for="company">Company (optional)</label>
+                <input type="text" id="company" name="company" placeholder="e.g. Acme Engineering" />
+                <label for="revision">Revision (optional)</label>
+                <input type="text" id="revision" name="revision" placeholder="e.g. A, Rev 1, 0" />
+                <button type="submit" style="margin-top:1.5rem; width:100%;">Create MDL</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- ────── The popup (modal) for creating new Drawing ────── -->
+    <div id="drawingModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeDrawingModal()">×</span>
+            <h2>Create New Drawing</h2>
+            <form id="drawingForm">
+                <label for="dwgNumber">Drawing Number <span style="color:red;">*</span></label>
+                <input type="text" id="dwgNumber" required placeholder="e.g. V0092524010" />
+                <label for="dwgTitle">Title / Description <span style="color:red;">*</span></label>
+                <input type="text" id="dwgTitle" required placeholder="e.g. Mirror Assembly – Lavatory" />
+                <label for="dwgRevision">Revision (optional)</label>
+                <input type="text" id="dwgRevision" placeholder="A" value="A" />
+                <button type="submit" style="margin-top:1.5rem; width:100%;">Create Drawing</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // ────────────────────────────────────────────────
+        // JAVASCRIPT starts here — this makes the page "alive"
+        // ────────────────────────────────────────────────
+        // We store all MDLs in the browser's localStorage (like a tiny database)
+        const STORAGE_KEY = 'mdl_list';
+        // Load previously saved MDLs (or empty array if first time)
+        function loadMDLs() {
+            const data = localStorage.getItem(STORAGE_KEY);
+            return data ? JSON.parse(data) : []; // convert string → array of objects
+        }
+        // Save the current list back to localStorage
+        function saveMDLs(mdls) {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(mdls));
+        }
+        // Load once when page opens
+        let mdls = loadMDLs();
+        let currentMdlId = null;
+
+        // ─── Show the table ───────────────────────────────────────
+        function renderTable(filtered = mdls) { // filtered defaults to all items
+            const tbody = document.getElementById('tableBody');
+            const noResMsg = document.getElementById('no-results');
+            const table = document.getElementById('resultsTable');
+            tbody.innerHTML = ''; // clear old rows
+            if (filtered.length === 0) {
+                noResMsg.textContent = mdls.length === 0
+                    ? "No MDLs yet. Create one to get started!"
+                    : "No matches found for your search.";
+                table.style.display = 'none';
+                return;
+            }
+            noResMsg.textContent = '';
+            table.style.display = 'table';
+            // Loop through each MDL and create a table row
+            filtered.forEach(m => {
+                const tr = document.createElement('tr'); // make new <tr>
+                tr.innerHTML = `
+            <td>${m.id}</td>
+            <td>${m.title}</td>
+            <td>${m.company || '—'}</td>
+            <td>${m.revision || '—'}</td>
+            <td>${m.created}</td>
+          `;
+                tr.dataset.mdlId = m.id; // Store ID for click handling
+                tbody.appendChild(tr); // put the row inside the table body
+            });
+        }
+        // Show initial list (probably empty at first)
+        renderTable();
+
+        // ─── Live search as you type ──────────────────────────────
+        document.getElementById('searchInput').addEventListener('input', function (e) {
+            const term = e.target.value.trim().toLowerCase();
+            if (!term) {
+                renderTable(mdls); // show all again
+                return;
+            }
+            // Keep only items that match the search term
+            const filtered = mdls.filter(m =>
+                m.id.toLowerCase().includes(term) ||
+                m.title.toLowerCase().includes(term) ||
+                (m.revision && m.revision.toLowerCase().includes(term)) ||
+                (m.company && m.company.toLowerCase().includes(term))
+            );
+            renderTable(filtered);
+        });
+
+        // ─── Modal (popup) controls for MDL ───────────────────────────────
+        const modal = document.getElementById('createModal');
+        const form = document.getElementById('createForm');
+        function openModal() {
+            modal.style.display = 'flex'; // show popup
+            form.reset(); // clear old values
+        }
+        function closeModal() {
+            modal.style.display = 'none';
+        }
+        // Click outside popup → close it
+        window.onclick = function (event) {
+            if (event.target === modal) closeModal();
+        };
+        // When user clicks "Create MDL"
+        form.addEventListener('submit', function (e) {
+            e.preventDefault(); // stop page from reloading
+            const id = document.getElementById('mdlId').value.trim();
+            const title = document.getElementById('title').value.trim();
+            const company = document.getElementById('company').value.trim();
+            const rev = document.getElementById('revision').value.trim();
+            // Basic safety check
+            if (!id || !title) return;
+            // Don't allow duplicate IDs
+            if (mdls.some(m => m.id === id)) {
+                alert('An MDL with this ID already exists!');
+                return;
+            }
+            // Create new object
+            const newMDL = {
+                id: id,
+                title: title,
+                company: company || null,
+                revision: rev || null, // null = no revision
+                created: new Date().toLocaleString('en-US', { dateStyle: 'short', timeStyle: 'short' }),
+                drawings: [] // Initialize empty drawings array
+            };
+            mdls.push(newMDL); // add to our list
+            saveMDLs(mdls); // save to browser storage
+            renderTable(); // refresh table
+            closeModal();
+            document.getElementById('searchInput').value = ''; // optional: clear search
+        });
+
+        // ─── Navigation ───────────────────────────────
+        function showListView() {
+            currentMdlId = null;
+            document.getElementById('mdlListView').style.display = 'block';
+            document.getElementById('mdlDetail').style.display = 'none';
+            renderTable(mdls);
+        }
+
+        function showMdlDetail(mdlId) {
+            const mdl = mdls.find(m => m.id === mdlId);
+            if (!mdl) return;
+
+            currentMdlId = mdlId;
+
+            document.getElementById('mdlListView').style.display = 'none';
+            document.getElementById('mdlDetail').style.display = 'block';
+
+            document.getElementById('mdlHeader').textContent =
+                `MDL: ${mdl.title} (${mdl.id}) ${mdl.company ? `– ${mdl.company}` : ''} ${mdl.revision ? `(Rev ${mdl.revision})` : ''}`;
+
+            renderDrawings(mdl);
+        }
+
+        // ─── Render drawings ───────────────────────────────
+        function renderDrawings(mdl, filtered = mdl.drawings) {
+            const tbody = document.getElementById('drawingsBody');
+            const noMsg = document.getElementById('no-drawings');
+            const table = document.getElementById('drawingsTable');
+
+            tbody.innerHTML = '';
+
+            if (filtered.length === 0) {
+                noMsg.textContent = mdl.drawings.length === 0
+                    ? "No drawings yet in this MDL. Create one to get started!"
+                    : "No matches found for your search.";
+                noMsg.style.display = 'block';
+                table.style.display = 'none';
+                return;
+            }
+
+            noMsg.style.display = 'none';
+            table.style.display = 'table';
+
+            filtered.forEach(dwg => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+            <td>${dwg.number}</td>
+            <td>${dwg.title}</td>
+            <td>${dwg.revision || '—'}</td>
+            <td>${dwg.created}</td>
+            <td>${dwg.lastUpdated || dwg.created}</td>
+          `;
+                // Later: tr.onclick = () => openDrawingEditor(dwg.number);
+                tbody.appendChild(tr);
+            });
+        }
+
+        // ─── Drawing modal ───────────────────────────────
+        const drawingModal = document.getElementById('drawingModal');
+        const drawingForm = document.getElementById('drawingForm');
+
+        function openDrawingModal() {
+            if (!currentMdlId) return;
+            drawingModal.style.display = 'flex';
+            drawingForm.reset();
+            document.getElementById('dwgRevision').value = 'A'; // default
+        }
+
+        function closeDrawingModal() {
+            drawingModal.style.display = 'none';
+        }
+
+        // Click outside drawing popup → close it
+        window.onclick = function (event) {
+            if (event.target === drawingModal) closeDrawingModal();
+            if (event.target === modal) closeModal();
+        };
+
+        drawingForm.addEventListener('submit', e => {
+            e.preventDefault();
+            const number = document.getElementById('dwgNumber').value.trim();
+            const title = document.getElementById('dwgTitle').value.trim();
+            const revision = document.getElementById('dwgRevision').value.trim();
+
+            if (!number || !title) return;
+
+            const mdl = mdls.find(m => m.id === currentMdlId);
+            if (!mdl) return;
+
+            if (mdl.drawings.some(d => d.number === number)) {
+                alert('A drawing with this number already exists in this MDL!');
+                return;
+            }
+
+            const now = new Date().toLocaleString('en-US', { dateStyle: 'short', timeStyle: 'short' });
+
+            const newDrawing = {
+                number,
+                title,
+                revision: revision || 'A',
+                created: now,
+                lastUpdated: now
+                // later: parts: [], notes: "", etc.
+            };
+
+            mdl.drawings.push(newDrawing);
+            saveMDLs(mdls);
+            renderDrawings(mdl);
+            closeDrawingModal();
+            document.getElementById('drawingSearch').value = ''; // clear search
+        });
+
+        // ─── Live search for drawings ──────────────────────────────
+        document.getElementById('drawingSearch').addEventListener('input', function (e) {
+            const term = e.target.value.trim().toLowerCase();
+            const mdl = mdls.find(m => m.id === currentMdlId);
+            if (!mdl) return;
+
+            if (!term) {
+                renderDrawings(mdl, mdl.drawings); // show all
+                return;
+            }
+
+            const filtered = mdl.drawings.filter(d =>
+                d.number.toLowerCase().includes(term) ||
+                d.title.toLowerCase().includes(term) ||
+                (d.revision && d.revision.toLowerCase().includes(term))
+            );
+            renderDrawings(mdl, filtered);
+        });
+
+        // ─── Make MDL table rows clickable ──────────────────────────────
+        document.getElementById('tableBody').addEventListener('click', e => {
+            const row = e.target.closest('tr');
+            if (!row) return;
+            const id = row.dataset.mdlId;
+            showMdlDetail(id);
+        });
+    </script>
+</body>
+</html>
