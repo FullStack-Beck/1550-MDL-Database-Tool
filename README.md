@@ -6,3 +6,5 @@ This project began as a frontend-only prototype to explore how engineering data 
 The core focus is on explicit revision control, hierarchical part structures, and carry-over workflows that preserve historical accuracy while allowing controlled evolution of data.
 
 As the data model and workflows mature, the project will transition to a Django backend to support persistence, permissions, auditing, and collaboration.
+
+https://fullstack-beck.github.io/1550-MDL-Database-Tool/Combined2.0.html
